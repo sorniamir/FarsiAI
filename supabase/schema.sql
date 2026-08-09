@@ -57,15 +57,23 @@ alter table public.credit_ledger enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 
+-- Profiles: users may read their row and only edit public-facing fields.
 drop policy if exists "profiles own row" on public.profiles;
-create policy "profiles own row" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
+drop policy if exists "profiles own read" on public.profiles;
+drop policy if exists "profiles own update" on public.profiles;
+create policy "profiles own read" on public.profiles for select using (auth.uid() = id);
+create policy "profiles own update" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+revoke update on public.profiles from authenticated;
+grant update (display_name, avatar_url) on public.profiles to authenticated;
 
+-- Credit state is read-only from the client. Mutations happen on the server.
 drop policy if exists "wallet own read" on public.credit_wallets;
 create policy "wallet own read" on public.credit_wallets for select using (auth.uid() = user_id);
 
 drop policy if exists "ledger own read" on public.credit_ledger;
 create policy "ledger own read" on public.credit_ledger for select using (auth.uid() = user_id);
 
+-- Conversation data is isolated per authenticated user.
 drop policy if exists "conversations own rows" on public.conversations;
 create policy "conversations own rows" on public.conversations for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -98,7 +106,7 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
--- Credit spending must happen server-side through the service role.
+-- Atomic credit spending. Only the server service role may execute this RPC.
 create or replace function public.spend_credits(p_user_id uuid, p_amount integer, p_reason text, p_reference_id text default null)
 returns integer
 language plpgsql
@@ -124,3 +132,4 @@ end;
 $$;
 
 revoke all on function public.spend_credits(uuid, integer, text, text) from public, anon, authenticated;
+grant execute on function public.spend_credits(uuid, integer, text, text) to service_role;
