@@ -29,6 +29,7 @@ export function ChatScreen({
   onCreditsChange?: (credits: number) => void;
 }) {
   const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [conversationId, setConversationId] = useState<string | undefined>();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const listRef = useRef<FlatList<UiMessage>>(null);
@@ -46,14 +47,20 @@ export function ChatScreen({
       const result = await sendAiRequest({
         mode,
         message,
+        conversationId,
         history: messages
           .filter((item) => item.text)
           .slice(-10)
           .map((item) => ({ role: item.role, content: item.text! })),
       });
 
-      if (result.ok && typeof result.creditsRemaining === 'number') {
-        onCreditsChange?.(result.creditsRemaining);
+      if (result.ok) {
+        if (typeof result.creditsRemaining === 'number') {
+          onCreditsChange?.(result.creditsRemaining);
+        }
+        if (result.conversationId) {
+          setConversationId(result.conversationId);
+        }
       }
 
       const assistant: UiMessage = !result.ok
