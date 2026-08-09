@@ -1,5 +1,4 @@
--- FarsiAI v0.2 database foundation
--- Run in a Supabase project SQL editor.
+-- FarsiAI initial production schema
 
 create extension if not exists pgcrypto;
 
@@ -57,7 +56,7 @@ alter table public.credit_ledger enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 
--- Profiles: users may read their row and only edit public-facing fields.
+-- Profiles: authenticated users can read their own row and only edit public fields.
 drop policy if exists "profiles own row" on public.profiles;
 drop policy if exists "profiles own read" on public.profiles;
 drop policy if exists "profiles own update" on public.profiles;
@@ -66,7 +65,7 @@ create policy "profiles own update" on public.profiles for update using (auth.ui
 revoke update on public.profiles from authenticated;
 grant update (display_name, avatar_url) on public.profiles to authenticated;
 
--- Credit state is read-only from the client. Mutations happen on the server.
+-- Credit state is read-only from clients.
 drop policy if exists "wallet own read" on public.credit_wallets;
 create policy "wallet own read" on public.credit_wallets for select using (auth.uid() = user_id);
 
@@ -95,7 +94,11 @@ begin
   on conflict (user_id) do nothing;
 
   insert into public.credit_ledger (user_id, delta, reason)
-  values (new.id, 150, 'welcome_credit');
+  select new.id, 150, 'welcome_credit'
+  where not exists (
+    select 1 from public.credit_ledger
+    where user_id = new.id and reason = 'welcome_credit'
+  );
 
   return new;
 end;
@@ -106,7 +109,7 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
--- Atomic credit spending. Only the server service role may execute this RPC.
+-- Atomic credit spending. Only the backend service role can execute this RPC.
 create or replace function public.spend_credits(p_user_id uuid, p_amount integer, p_reason text, p_reference_id text default null)
 returns integer
 language plpgsql

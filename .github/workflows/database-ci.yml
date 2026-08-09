@@ -1,0 +1,39 @@
+name: Database CI
+
+on:
+  push:
+    branches: [main, "agent/**"]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/database-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/database-ci.yml"
+
+jobs:
+  validate-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local database
+        run: supabase db start
+
+      - name: Replay migrations from scratch
+        run: supabase db reset
+
+      - name: Lint database
+        run: supabase db lint --level warning
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
