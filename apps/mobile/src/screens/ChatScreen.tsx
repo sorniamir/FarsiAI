@@ -19,7 +19,15 @@ const STARTERS = [
   'یک ایده خلاقانه برای تصویر آینده تهران پیشنهاد بده',
 ];
 
-export function ChatScreen({ mode, onModeChange }: { mode: Exclude<AppMode, 'video'>; onModeChange: (mode: AppMode) => void }) {
+export function ChatScreen({
+  mode,
+  onModeChange,
+  onCreditsChange,
+}: {
+  mode: Exclude<AppMode, 'video'>;
+  onModeChange: (mode: AppMode) => void;
+  onCreditsChange?: (credits: number) => void;
+}) {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,6 +51,10 @@ export function ChatScreen({ mode, onModeChange }: { mode: Exclude<AppMode, 'vid
           .slice(-10)
           .map((item) => ({ role: item.role, content: item.text! })),
       });
+
+      if (result.ok && typeof result.creditsRemaining === 'number') {
+        onCreditsChange?.(result.creditsRemaining);
+      }
 
       const assistant: UiMessage = !result.ok
         ? { id: `${Date.now()}-e`, role: 'assistant', text: result.error }
