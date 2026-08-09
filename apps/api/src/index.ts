@@ -26,13 +26,12 @@ function validHistory(value: unknown): ConversationMessage[] {
     .map((item) => ({ role: item.role, content: sanitizeText(item.content, 3000) }));
 }
 
-async function stableActorKey(request: Request): Promise<string> {
-  const authorization = request.headers.get('authorization')?.trim();
-  const source = authorization || request.headers.get('cf-connecting-ip') || 'anonymous';
+async function guestActorKey(request: Request): Promise<string> {
+  const source = request.headers.get('cf-connecting-ip') || 'anonymous';
   const bytes = new TextEncoder().encode(source);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-  return `${authorization ? 'auth' : 'guest'}:${hex.slice(0, 32)}`;
+  return `guest:${hex.slice(0, 32)}`;
 }
 
 export default {
@@ -60,21 +59,21 @@ export default {
 
       if (!message) return json(env, { ok: false, error: 'پیام خالی است.' }, 400);
 
-      const actorKey = await stableActorKey(request);
-      const limiter = mode === 'image' ? env.IMAGE_RATE_LIMITER : env.API_RATE_LIMITER;
-      const { success } = await limiter.limit({ key: `${actorKey}:${mode}` });
-
-      if (!success) {
-        console.warn(JSON.stringify({ event: 'rate_limited', requestId, mode, actor: actorKey.split(':')[0] }));
-        return json(env, { ok: false, error: 'تعداد درخواست‌ها زیاد شده. کمی بعد دوباره تلاش کنید.' }, 429);
-      }
-
       const auth = await resolveAuth(request, env);
       if (auth.kind === 'invalid') {
         return json(env, { ok: false, error: 'نشست کاربری معتبر نیست. دوباره وارد حساب شوید.' }, 401);
       }
       if (auth.kind === 'unconfigured') {
         return json(env, { ok: false, error: 'اتصال حساب کاربری به سرور هنوز کامل نشده است.' }, 503);
+      }
+
+      const actorKey = auth.kind === 'user' ? `user:${auth.user.id}` : await guestActorKey(request);
+      const limiter = mode === 'image' ? env.IMAGE_RATE_LIMITER : env.API_RATE_LIMITER;
+      const { success } = await limiter.limit({ key: `${actorKey}:${mode}` });
+
+      if (!success) {
+        console.warn(JSON.stringify({ event: 'rate_limited', requestId, mode, actor: auth.kind }));
+        return json(env, { ok: false, error: 'تعداد درخواست‌ها زیاد شده. کمی بعد دوباره تلاش کنید.' }, 429);
       }
 
       let creditsRemaining: number | undefined;
