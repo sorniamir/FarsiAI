@@ -27,4 +27,6 @@ export type AiRequest = {
   message: string;
   history?: ConversationMessage[];
   conversationId?: string;
+  referenceImage?: string;
+  referencePrompt?: string;
 };

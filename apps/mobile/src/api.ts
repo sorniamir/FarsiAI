@@ -14,6 +14,7 @@ export type AiResponse =
       mode: 'image';
       image: string;
       revisedPrompt?: string;
+      edited?: boolean;
       creditsRemaining?: number;
       conversationId?: string;
     }
@@ -26,6 +27,8 @@ export async function sendAiRequest(input: {
   message: string;
   history: ApiMessage[];
   conversationId?: string;
+  referenceImage?: string;
+  referencePrompt?: string;
 }): Promise<AiResponse> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
 

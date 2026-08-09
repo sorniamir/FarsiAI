@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { signIn, signUp } from '../services/auth';
-import { theme } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
 
 export function AuthScreen({ onDone, onGuest }: { onDone: () => void; onGuest: () => void }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -81,7 +84,7 @@ export function AuthScreen({ onDone, onGuest }: { onDone: () => void; onGuest: (
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background, padding: 24, justifyContent: 'center' },
   spark: { textAlign: 'center', color: theme.colors.cyan, fontSize: 54, marginBottom: 10 },
   title: { color: theme.colors.text, textAlign: 'center', fontSize: 28, fontWeight: '900', writingDirection: 'rtl' },
@@ -91,7 +94,7 @@ const styles = StyleSheet.create({
   input: { color: theme.colors.text, backgroundColor: theme.colors.surfaceRaised, borderColor: theme.colors.border, borderWidth: 1, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 15, marginBottom: 11, fontSize: 15 },
   message: { color: theme.colors.warning, textAlign: 'right', marginBottom: 10, fontSize: 12, writingDirection: 'rtl' },
   primary: { height: 54, borderRadius: 18, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
-  primaryText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  primaryText: { color: theme.colors.onAccent, fontWeight: '900', fontSize: 16 },
   secondary: { alignItems: 'center', paddingVertical: 15 },
   secondaryText: { color: theme.colors.primaryBright, fontWeight: '800' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 5 },

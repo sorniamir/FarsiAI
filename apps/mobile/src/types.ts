@@ -5,4 +5,5 @@ export type UiMessage = {
   role: 'user' | 'assistant';
   text?: string;
   image?: string;
+  revisedPrompt?: string;
 };

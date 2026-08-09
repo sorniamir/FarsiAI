@@ -135,7 +135,11 @@ export default {
       }));
 
       if (mode === 'image') {
-        const result = await runImage(env, message);
+        const referenceImage = typeof payload.referenceImage === 'string' ? payload.referenceImage : undefined;
+        const referencePrompt = typeof payload.referencePrompt === 'string'
+          ? sanitizeText(payload.referencePrompt, 3000)
+          : undefined;
+        const result = await runImage(env, message, referenceImage, referencePrompt);
 
         if (auth.kind === 'user' && conversationId) {
           try {
@@ -162,6 +166,7 @@ export default {
           mode: 'image',
           image: result.image,
           revisedPrompt: result.prompt,
+          edited: result.edited,
           creditsRemaining,
           conversationId,
         });
