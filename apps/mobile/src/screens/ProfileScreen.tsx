@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppTheme } from '../ThemeProvider';
 import type { AppTheme } from '../theme';
+import type { DailyQuota } from '../types';
 
-export function ProfileScreen({ isGuest, credits, onSignOut }: { isGuest: boolean; credits: number; onSignOut: () => void }) {
+export function ProfileScreen({ isGuest, email, quota, onSignOut }: { isGuest: boolean; email?: string; quota: DailyQuota; onSignOut: () => void }) {
   const { theme, mode, toggle } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
@@ -11,15 +12,19 @@ export function ProfileScreen({ isGuest, credits, onSignOut }: { isGuest: boolea
       <View style={styles.hero}>
         <View style={styles.avatar}><Text style={styles.avatarText}>✦</Text></View>
         <Text style={styles.name}>{isGuest ? 'کاربر مهمان' : 'حساب FarsiAI'}</Text>
-        <Text style={styles.plan}>{isGuest ? 'Guest Mode' : 'Free Plan'}</Text>
+        <Text style={styles.plan}>{isGuest ? 'حالت مهمان' : 'وارد شده'}</Text>
+        {!isGuest && email ? <Text style={styles.email}>{email}</Text> : null}
       </View>
 
       <View style={styles.creditCard}>
         <View style={styles.creditRight}>
-          <Text style={styles.creditLabel}>اعتبار باقی‌مانده</Text>
-          <Text style={styles.creditHint}>برای چت و ساخت تصویر</Text>
+          <Text style={styles.creditLabel}>سهمیه امروز</Text>
+          <Text style={styles.creditHint}>هر روز ساعت ۰۰:۰۰ UTC تازه می‌شود</Text>
         </View>
-        <View style={styles.creditPill}><Text style={styles.creditValue}>{credits}</Text><Text style={styles.creditUnit}> Credits</Text></View>
+        <View style={styles.quotaStack}>
+          <Text style={styles.quotaText}>{quota.chatRemaining} پیام</Text>
+          <Text style={styles.quotaText}>{quota.imageRemaining} تصویر</Text>
+        </View>
       </View>
 
       <View style={styles.menu}>
@@ -40,7 +45,7 @@ export function ProfileScreen({ isGuest, credits, onSignOut }: { isGuest: boolea
       <TouchableOpacity style={styles.logout} onPress={onSignOut} activeOpacity={0.8}>
         <Text style={styles.logoutText}>{isGuest ? 'خروج از حالت مهمان' : 'خروج از حساب'}</Text>
       </TouchableOpacity>
-      <Text style={styles.version}>FarsiAI v0.3 • Production Beta</Text>
+      <Text style={styles.version}>FarsiAi v0.3.1 • Production Beta</Text>
     </View>
   );
 }
@@ -64,6 +69,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   avatarText: { color: theme.colors.cyan, fontSize: 35 },
   name: { color: theme.colors.text, fontSize: 22, fontWeight: '900', marginTop: 12 },
   plan: { color: theme.colors.primaryBright, fontSize: 12, fontWeight: '800', marginTop: 4 },
+  email: { color: theme.colors.textMuted, fontSize: 12, marginTop: 7 },
   creditCard: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', borderRadius: 22, padding: 17, backgroundColor: theme.colors.surfaceRaised, borderWidth: 1, borderColor: theme.colors.border },
   creditRight: { flex: 1 },
   creditLabel: { color: theme.colors.text, textAlign: 'right', fontWeight: '900' },
@@ -71,6 +77,8 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   creditPill: { flexDirection: 'row', alignItems: 'baseline', backgroundColor: theme.colors.accentSoft, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
   creditValue: { color: theme.colors.cyan, fontSize: 21, fontWeight: '900' },
   creditUnit: { color: theme.colors.cyan, fontSize: 10, fontWeight: '800' },
+  quotaStack: { alignItems: 'flex-end', gap: 4, backgroundColor: theme.colors.accentSoft, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
+  quotaText: { color: theme.colors.cyan, fontSize: 12, fontWeight: '900' },
   menu: { marginTop: 18, borderRadius: 22, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border },
   row: { minHeight: 68, backgroundColor: theme.colors.surface, flexDirection: 'row-reverse', alignItems: 'center', gap: 11, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   themeRow: { minHeight: 72, backgroundColor: theme.colors.surface, flexDirection: 'row-reverse', alignItems: 'center', gap: 11, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },

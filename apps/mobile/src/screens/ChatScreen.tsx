@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -11,9 +12,10 @@ import {
 import { sendAiRequest } from '../api';
 import { MessageBubble } from '../components/MessageBubble';
 import { getConversationMessages } from '../services/history';
+import { consumeGuestQuota } from '../services/quota';
 import { useAppTheme } from '../ThemeProvider';
 import type { AppTheme } from '../theme';
-import type { AppMode, UiMessage } from '../types';
+import type { AppMode, DailyQuota, UiMessage } from '../types';
 
 const STARTERS = [
   'برای امروز یک برنامه مفید و واقع‌بینانه بساز',
@@ -24,13 +26,19 @@ const STARTERS = [
 export function ChatScreen({
   mode,
   onModeChange,
-  onCreditsChange,
+  onQuotaChange,
   initialConversationId,
+  isGuest,
+  quota,
+  onRequireAccount,
 }: {
   mode: Exclude<AppMode, 'video'>;
   onModeChange: (mode: AppMode) => void;
-  onCreditsChange?: (credits: number) => void;
+  onQuotaChange: (quota: DailyQuota) => void;
   initialConversationId?: string;
+  isGuest: boolean;
+  quota: DailyQuota;
+  onRequireAccount: () => void;
 }) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -51,6 +59,25 @@ export function ChatScreen({
   async function submit(prefill?: string) {
     const message = (prefill ?? input).trim();
     if (!message || loading) return;
+    const remaining = mode === 'chat' ? quota.chatRemaining : quota.imageRemaining;
+    if (remaining <= 0) {
+      setMessages((current) => [...current, {
+        id: `${Date.now()}-limit`,
+        role: 'assistant',
+        text: isGuest
+          ? 'سهمیه مهمان تمام شد. برای ادامه یک حساب رایگان بساز.'
+          : mode === 'chat'
+            ? 'سهمیه ۱۰ پیام امروز تمام شده است. فردا دوباره شارژ می‌شود.'
+            : 'سهمیه ۴ تصویر امروز تمام شده است. فردا دوباره شارژ می‌شود.',
+      }]);
+      if (isGuest) {
+        Alert.alert('سهمیه مهمان تمام شد', 'برای دریافت سهمیه روزانه، حساب رایگان بساز.', [
+          { text: 'بعداً', style: 'cancel' },
+          { text: 'ساخت حساب', onPress: onRequireAccount },
+        ]);
+      }
+      return;
+    }
 
     const userMessage: UiMessage = { id: `${Date.now()}-u`, role: 'user', text: message };
     setMessages((current) => [...current, userMessage]);
@@ -72,8 +99,10 @@ export function ChatScreen({
       });
 
       if (result.ok) {
-        if (typeof result.creditsRemaining === 'number') {
-          onCreditsChange?.(result.creditsRemaining);
+        if (result.quota) onQuotaChange(result.quota);
+        else if (isGuest) {
+          const guestQuota = consumeGuestQuota(mode);
+          if (guestQuota) onQuotaChange(guestQuota);
         }
         if (result.conversationId) {
           setConversationId(result.conversationId);

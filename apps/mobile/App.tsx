@@ -11,8 +11,8 @@ import {
 import { AppHeader } from './src/components/AppHeader';
 import { BottomNav, type MainTab } from './src/components/BottomNav';
 import { ModeBar } from './src/components/ModeBar';
-import { getCreditBalance } from './src/services/account';
-import { createSessionFromUrl, hasActiveSession, signOut } from './src/services/auth';
+import { createSessionFromUrl, getCurrentUserEmail, hasActiveSession, signOut } from './src/services/auth';
+import { DEFAULT_DAILY_QUOTA, getAuthenticatedQuota, getGuestQuota } from './src/services/quota';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -21,10 +21,9 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { VideoComingSoon } from './src/screens/VideoComingSoon';
 import { ThemeProvider, useAppTheme } from './src/ThemeProvider';
 import type { AppTheme } from './src/theme';
-import type { AppMode } from './src/types';
+import type { AppMode, DailyQuota } from './src/types';
 
 type Stage = 'onboarding' | 'auth' | 'app';
-const GUEST_CREDITS = 150;
 
 export default function App() {
   return <ThemeProvider><AppContent /></ThemeProvider>;
@@ -37,15 +36,16 @@ function AppContent() {
   const [tab, setTab] = useState<MainTab>('chat');
   const [mode, setMode] = useState<AppMode>('chat');
   const [isGuest, setIsGuest] = useState(false);
-  const [credits, setCredits] = useState(GUEST_CREDITS);
+  const [quota, setQuota] = useState<DailyQuota>(DEFAULT_DAILY_QUOTA);
+  const [userEmail, setUserEmail] = useState<string | undefined>();
   const [conversationId, setConversationId] = useState<string | undefined>();
 
   useEffect(() => {
     hasActiveSession().then(async (active) => {
       if (!active) return;
       setIsGuest(false);
-      const balance = await getCreditBalance();
-      if (balance !== null) setCredits(balance);
+      setUserEmail(await getCurrentUserEmail());
+      setQuota(await getAuthenticatedQuota());
       setStage('app');
     });
   }, []);
@@ -65,14 +65,15 @@ function AppContent() {
     setIsGuest(false);
     setTab('chat');
     setConversationId(undefined);
-    const balance = await getCreditBalance();
-    setCredits(balance ?? GUEST_CREDITS);
+    setUserEmail(await getCurrentUserEmail());
+    setQuota(await getAuthenticatedQuota());
     setStage('app');
   }
 
   function enterGuestApp() {
     setIsGuest(true);
-    setCredits(GUEST_CREDITS);
+    setUserEmail(undefined);
+    setQuota(getGuestQuota());
     setTab('chat');
     setConversationId(undefined);
     setStage('app');
@@ -99,7 +100,8 @@ function AppContent() {
   async function exitAccount() {
     if (!isGuest) await signOut();
     setIsGuest(false);
-    setCredits(GUEST_CREDITS);
+    setUserEmail(undefined);
+    setQuota(DEFAULT_DAILY_QUOTA);
     setTab('chat');
     setMode('chat');
     setStage('auth');
@@ -111,20 +113,20 @@ function AppContent() {
 
       {tab === 'chat' ? (
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <AppHeader credits={credits} mode={mode} />
+          <AppHeader quota={quota} mode={mode} />
           <ModeBar mode={mode} onChange={setMode} />
           <View style={styles.content}>
             {mode === 'video' ? (
               <VideoComingSoon />
             ) : (
-              <ChatScreen key={conversationId ?? 'new'} initialConversationId={conversationId} mode={mode} onModeChange={setMode} onCreditsChange={setCredits} />
+              <ChatScreen key={conversationId ?? 'new'} initialConversationId={conversationId} mode={mode} isGuest={isGuest} quota={quota} onModeChange={setMode} onQuotaChange={setQuota} onRequireAccount={() => setStage('auth')} />
             )}
           </View>
         </KeyboardAvoidingView>
       ) : tab === 'history' ? (
         <HistoryScreen onOpenChat={(id) => { setConversationId(id); setTab('chat'); }} />
       ) : (
-        <ProfileScreen isGuest={isGuest} credits={credits} onSignOut={exitAccount} />
+        <ProfileScreen isGuest={isGuest} email={userEmail} quota={quota} onSignOut={exitAccount} />
       )}
 
       <BottomNav tab={tab} onChange={setTab} />

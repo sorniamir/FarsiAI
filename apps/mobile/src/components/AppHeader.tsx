@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../ThemeProvider';
 import type { AppTheme } from '../theme';
-import type { AppMode } from '../types';
+import type { AppMode, DailyQuota } from '../types';
 
 const subtitles: Record<AppMode, string> = {
   chat: 'دستیار هوشمند فارسی',
@@ -10,7 +10,7 @@ const subtitles: Record<AppMode, string> = {
   video: 'نسل بعدی ابزارهای خلاقانه',
 };
 
-export function AppHeader({ credits, mode }: { credits: number; mode: AppMode }) {
+export function AppHeader({ quota, mode }: { quota: DailyQuota; mode: AppMode }) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
@@ -25,7 +25,7 @@ export function AppHeader({ credits, mode }: { credits: number; mode: AppMode })
       </View>
       <View style={styles.creditPill}>
         <Text style={styles.creditIcon}>◆</Text>
-        <Text style={styles.creditText}>{credits}</Text>
+        <Text style={styles.creditText}>{quota.chatRemaining} پیام · {quota.imageRemaining} تصویر</Text>
       </View>
     </View>
   );

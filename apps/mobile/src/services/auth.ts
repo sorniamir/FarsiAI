@@ -11,8 +11,13 @@ function unavailable(): AuthResult {
 
 export async function signIn(email: string, password: string): Promise<AuthResult> {
   if (!isSupabaseConfigured || !supabase) return unavailable();
-  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-  return error ? { ok: false, message: error.message } : { ok: true };
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) return { ok: false, message: error.message };
+  if (!data.user?.email_confirmed_at) {
+    await supabase.auth.signOut();
+    return { ok: false, message: 'ابتدا لینک تأیید ارسال‌شده به ایمیلت را باز کن.' };
+  }
+  return { ok: true };
 }
 
 export async function signUp(email: string, password: string): Promise<AuthResult> {
@@ -37,7 +42,10 @@ export async function createSessionFromUrl(url: string): Promise<AuthResult> {
     const code = params.get('code');
     if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
-      return error ? { ok: false, message: error.message } : { ok: true };
+      if (error) return { ok: false, message: error.message };
+      return (await hasActiveSession())
+        ? { ok: true }
+        : { ok: false, message: 'تأیید ایمیل کامل نشد. لینک جدید درخواست کن.' };
     }
 
     const accessToken = params.get('access_token');
@@ -46,7 +54,10 @@ export async function createSessionFromUrl(url: string): Promise<AuthResult> {
       return { ok: false, message: 'لینک تأیید معتبر نیست یا منقضی شده است.' };
     }
     const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    return error ? { ok: false, message: error.message } : { ok: true };
+    if (error) return { ok: false, message: error.message };
+    return (await hasActiveSession())
+      ? { ok: true }
+      : { ok: false, message: 'تأیید ایمیل کامل نشد. لینک جدید درخواست کن.' };
   } catch {
     return { ok: false, message: 'باز کردن لینک تأیید انجام نشد. دوباره درخواست تأیید بده.' };
   }
@@ -58,6 +69,14 @@ export async function signOut(): Promise<void> {
 
 export async function hasActiveSession(): Promise<boolean> {
   if (!supabase) return false;
-  const { data } = await supabase.auth.getSession();
-  return Boolean(data.session);
+  const { data, error } = await supabase.auth.getUser();
+  const verified = !error && Boolean(data.user?.email_confirmed_at);
+  if (!verified) await supabase.auth.signOut();
+  return verified;
+}
+
+export async function getCurrentUserEmail(): Promise<string | undefined> {
+  if (!supabase) return undefined;
+  const { data } = await supabase.auth.getUser();
+  return data.user?.email ?? undefined;
 }
