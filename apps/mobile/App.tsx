@@ -92,7 +92,11 @@ export default function App() {
           <AppHeader credits={credits} mode={mode} />
           <ModeBar mode={mode} onChange={setMode} />
           <View style={styles.content}>
-            {mode === 'video' ? <VideoComingSoon /> : <ChatScreen mode={mode} onModeChange={setMode} />}
+            {mode === 'video' ? (
+              <VideoComingSoon />
+            ) : (
+              <ChatScreen mode={mode} onModeChange={setMode} onCreditsChange={setCredits} />
+            )}
           </View>
         </KeyboardAvoidingView>
       ) : tab === 'history' ? (
