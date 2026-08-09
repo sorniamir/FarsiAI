@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "FarsiAI",
+    "slug": "farsiai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "ai.farsiai.app",
+      "adaptiveIcon": { "backgroundColor": "#070A12" }
+    },
+    "ios": {
+      "bundleIdentifier": "ai.farsiai.app",
+      "supportsTablet": true
+    }
+  }
+}

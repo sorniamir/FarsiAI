@@ -1,0 +1,9 @@
+name = "farsiai-api"
+main = "src/index.ts"
+compatibility_date = "2026-08-09"
+
+[ai]
+binding = "AI"
+
+[vars]
+ALLOWED_ORIGIN = "*"

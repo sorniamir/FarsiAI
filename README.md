@@ -1,32 +1,41 @@
 # FarsiAI — MVP 0.1
 
-کدنیم موقت برای اپ هوش مصنوعی فارسی: چت، ساخت تصویر و بخش ویدیو (Coming Soon).
+اپ هوش مصنوعی فارسی با چت، ساخت تصویر داخل همان گفتگو و بخش ویدیو (Coming Soon).
 
 ## ساختار
 
-- `apps/mobile`: اپ React Native + Expo
+- `apps/mobile`: React Native + Expo
 - `apps/api`: Cloudflare Worker + Workers AI
 - `docs`: معماری و Roadmap
 
-## جریان چت
+## AI Flow
 
-1. متن کاربر وارد API امن می‌شود.
-2. پیام فارسی در صورت نیاز برای مدل ترجمه می‌شود.
-3. مدل چت با تاریخچه مکالمه پاسخ را تولید می‌کند.
-4. پاسخ برای کاربر فارسی‌سازی می‌شود.
-5. خروجی نهایی به اپ ارسال می‌شود.
+- Chat: Persian input → M2M100 → Qwen3 → M2M100 → Persian output
+- Image: Persian prompt → M2M100 → FLUX.1 Schnell → image
+- API keys فقط در Backend نگهداری می‌شوند.
 
-## جریان تصویر
+## اجرای محلی
 
-1. کاربر Image Mode را در همان چت فعال می‌کند.
-2. Prompt فارسی در صورت نیاز ترجمه می‌شود.
-3. مدل تصویر خروجی را می‌سازد.
-4. تصویر در همان مکالمه نمایش داده می‌شود.
+```bash
+npm install
+npm run check
+```
 
-## وضعیت MVP
+API:
+```bash
+cd apps/api
+npx wrangler dev
+```
 
-- UI چت فارسی: آماده
-- Image Mode در چت: آماده
-- Video UI: Coming Soon
-- AI Gateway: آماده برای Cloudflare Workers AI
-- احراز هویت/اشتراک/پرداخت: فاز بعدی
+Mobile:
+```bash
+cd apps/mobile
+EXPO_PUBLIC_API_URL=http://YOUR-LAN-IP:8787 npx expo start
+```
+
+## وضعیت
+
+- Chat UI: آماده
+- Image Mode: آماده
+- Video: Coming Soon
+- Auth / Subscription / Payment: فاز بعدی
