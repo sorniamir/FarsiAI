@@ -8,8 +8,15 @@ export type ApiMessage = {
 };
 
 export type AiResponse =
-  | { ok: true; mode: 'chat'; text: string; creditsRemaining?: number }
-  | { ok: true; mode: 'image'; image: string; revisedPrompt?: string; creditsRemaining?: number }
+  | { ok: true; mode: 'chat'; text: string; creditsRemaining?: number; conversationId?: string }
+  | {
+      ok: true;
+      mode: 'image';
+      image: string;
+      revisedPrompt?: string;
+      creditsRemaining?: number;
+      conversationId?: string;
+    }
   | { ok: false; error: string };
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
@@ -18,6 +25,7 @@ export async function sendAiRequest(input: {
   mode: AiMode;
   message: string;
   history: ApiMessage[];
+  conversationId?: string;
 }): Promise<AiResponse> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
 
