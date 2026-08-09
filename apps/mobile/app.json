@@ -2,9 +2,14 @@
   "expo": {
     "name": "FarsiAI",
     "slug": "farsiai",
-    "version": "0.1.0",
+    "scheme": "farsiai",
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#070A12",
+      "resizeMode": "contain"
+    },
     "android": {
       "package": "ai.farsiai.app",
       "adaptiveIcon": { "backgroundColor": "#070A12" }
