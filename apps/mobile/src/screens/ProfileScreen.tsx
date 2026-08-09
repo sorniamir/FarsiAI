@@ -29,7 +29,7 @@ export function ProfileScreen({ isGuest, credits, onSignOut }: { isGuest: boolea
       <TouchableOpacity style={styles.logout} onPress={onSignOut} activeOpacity={0.8}>
         <Text style={styles.logoutText}>{isGuest ? 'خروج از حالت مهمان' : 'خروج از حساب'}</Text>
       </TouchableOpacity>
-      <Text style={styles.version}>FarsiAI v0.2 • Product Shell</Text>
+      <Text style={styles.version}>FarsiAI v0.3 • Production Beta</Text>
     </View>
   );
 }

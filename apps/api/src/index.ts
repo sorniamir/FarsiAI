@@ -53,9 +53,19 @@ export default {
     }
 
     try {
-      const payload = (await request.json()) as Partial<AiRequest>;
+      let payload: Partial<AiRequest>;
+      try {
+        payload = (await request.json()) as Partial<AiRequest>;
+      } catch {
+        return json(env, { ok: false, error: 'بدنه درخواست باید JSON معتبر باشد.' }, 400);
+      }
+
+      if (payload.mode !== 'chat' && payload.mode !== 'image') {
+        return json(env, { ok: false, error: 'حالت درخواست باید chat یا image باشد.' }, 400);
+      }
+
       const message = sanitizeText(payload.message, 6000);
-      const mode = payload.mode === 'image' ? 'image' : 'chat';
+      const mode = payload.mode;
 
       if (!message) return json(env, { ok: false, error: 'پیام خالی است.' }, 400);
 
