@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "FarsiAI",
-    "slug": "farsiai",
+    "owner": "sorniamirs-team",
+    "slug": "amir-sorni",
     "scheme": "farsiai",
     "version": "0.3.0",
     "orientation": "portrait",
@@ -18,6 +19,11 @@
     "ios": {
       "bundleIdentifier": "ai.farsiai.app",
       "supportsTablet": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "447d278b-46a6-4f9a-821a-63e0c2b1d9ad"
+      }
     }
   }
 }
