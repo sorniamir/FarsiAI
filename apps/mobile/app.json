@@ -3,7 +3,7 @@
     "name": "FarsiAI",
     "slug": "farsiai",
     "scheme": "farsiai",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "splash": {
@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "ai.farsiai.app",
+      "versionCode": 3,
       "adaptiveIcon": { "backgroundColor": "#070A12" }
     },
     "ios": {
