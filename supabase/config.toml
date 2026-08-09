@@ -1,0 +1,17 @@
+project_id = "farsiai"
+
+[api]
+enabled = true
+
+[db]
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "farsiai://auth"
+additional_redirect_urls = ["farsiai://auth/callback"]
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
