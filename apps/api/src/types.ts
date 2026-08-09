@@ -26,4 +26,5 @@ export type AiRequest = {
   mode: 'chat' | 'image';
   message: string;
   history?: ConversationMessage[];
+  conversationId?: string;
 };
