@@ -3,9 +3,6 @@ project_id = "farsiai"
 [api]
 enabled = true
 
-[db]
-major_version = 17
-
 [auth]
 enabled = true
 site_url = "farsiai://auth"
