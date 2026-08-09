@@ -1,3 +1,5 @@
+import { supabase } from './lib/supabase';
+
 export type AiMode = 'chat' | 'image';
 
 export type ApiMessage = {
@@ -17,13 +19,31 @@ export async function sendAiRequest(input: {
   message: string;
   history: ApiMessage[];
 }): Promise<AiResponse> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+
+  if (supabase) {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (token) headers.authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_URL}/v1/ai`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify(input),
   });
 
-  const data = (await response.json()) as AiResponse;
-  if (!response.ok) return { ok: false, error: 'ارتباط با سرور برقرار نشد. دوباره تلاش کنید.' };
+  let data: AiResponse;
+  try {
+    data = (await response.json()) as AiResponse;
+  } catch {
+    return { ok: false, error: 'پاسخ نامعتبر از سرور دریافت شد.' };
+  }
+
+  if (!response.ok) {
+    if ('error' in data && data.error) return data;
+    return { ok: false, error: 'ارتباط با سرور برقرار نشد. دوباره تلاش کنید.' };
+  }
+
   return data;
 }
