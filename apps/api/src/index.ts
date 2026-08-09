@@ -1,8 +1,15 @@
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
+import { refundCredits, spendCredits } from './lib/credits';
 import { corsHeaders, json } from './lib/http';
 import { sanitizeText } from './lib/language';
+import { resolveAuth } from './lib/supabase-auth';
 import type { AiRequest, ConversationMessage, Env } from './types';
+
+const CREDIT_COST = {
+  chat: 1,
+  image: 20,
+} as const;
 
 function validHistory(value: unknown): ConversationMessage[] {
   if (!Array.isArray(value)) return [];
@@ -31,6 +38,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const requestId = request.headers.get('cf-ray') || crypto.randomUUID();
+    let charged: { userId: string; amount: number; mode: 'chat' | 'image' } | null = null;
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
@@ -60,18 +68,76 @@ export default {
         return json(env, { ok: false, error: 'تعداد درخواست‌ها زیاد شده. کمی بعد دوباره تلاش کنید.' }, 429);
       }
 
-      console.log(JSON.stringify({ event: 'ai_request', requestId, mode, authenticated: actorKey.startsWith('auth:') }));
+      const auth = await resolveAuth(request, env);
+      if (auth.kind === 'invalid') {
+        return json(env, { ok: false, error: 'نشست کاربری معتبر نیست. دوباره وارد حساب شوید.' }, 401);
+      }
+      if (auth.kind === 'unconfigured') {
+        return json(env, { ok: false, error: 'اتصال حساب کاربری به سرور هنوز کامل نشده است.' }, 503);
+      }
+
+      let creditsRemaining: number | undefined;
+      if (auth.kind === 'user') {
+        const amount = CREDIT_COST[mode];
+        const spend = await spendCredits(env, auth.user.id, amount, `ai_${mode}`, requestId);
+
+        if (!spend.ok) {
+          if (spend.reason === 'insufficient') {
+            return json(env, { ok: false, error: 'اعتبار کافی برای این درخواست ندارید.' }, 402);
+          }
+          if (spend.reason === 'unconfigured') {
+            return json(env, { ok: false, error: 'سیستم اعتبار سرور هنوز تنظیم نشده است.' }, 503);
+          }
+          return json(env, { ok: false, error: 'بررسی اعتبار موقتاً در دسترس نیست.' }, 503);
+        }
+
+        creditsRemaining = spend.balance;
+        charged = { userId: auth.user.id, amount, mode };
+      }
+
+      console.log(JSON.stringify({
+        event: 'ai_request',
+        requestId,
+        mode,
+        authenticated: auth.kind === 'user',
+      }));
 
       if (mode === 'image') {
         const result = await runImage(env, message);
+        charged = null;
         console.log(JSON.stringify({ event: 'ai_success', requestId, mode }));
-        return json(env, { ok: true, mode: 'image', image: result.image, revisedPrompt: result.prompt });
+        return json(env, {
+          ok: true,
+          mode: 'image',
+          image: result.image,
+          revisedPrompt: result.prompt,
+          creditsRemaining,
+        });
       }
 
       const text = await runChat(env, message, validHistory(payload.history));
+      charged = null;
       console.log(JSON.stringify({ event: 'ai_success', requestId, mode }));
-      return json(env, { ok: true, mode: 'chat', text });
+      return json(env, { ok: true, mode: 'chat', text, creditsRemaining });
     } catch (error) {
+      if (charged) {
+        try {
+          await refundCredits(
+            env,
+            charged.userId,
+            charged.amount,
+            `ai_refund_${charged.mode}`,
+            requestId,
+          );
+        } catch (refundError) {
+          console.error(JSON.stringify({
+            event: 'credit_refund_exception',
+            requestId,
+            message: refundError instanceof Error ? refundError.message : 'unknown_refund_error',
+          }));
+        }
+      }
+
       console.error(JSON.stringify({
         event: 'ai_error',
         requestId,
