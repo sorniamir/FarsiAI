@@ -1,11 +1,13 @@
 {
   "name": "farsiai",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "workspaces": ["apps/mobile", "apps/api"],
   "scripts": {
     "mobile": "npm --workspace apps/mobile run start",
     "api": "npm --workspace apps/api run dev",
-    "check": "npm --workspace apps/api run check"
+    "check:api": "npm --workspace apps/api run check",
+    "check:mobile": "npm --workspace apps/mobile run typecheck",
+    "check": "npm run check:api && npm run check:mobile"
   }
 }
