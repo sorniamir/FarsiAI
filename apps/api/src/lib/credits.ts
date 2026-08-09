@@ -5,10 +5,11 @@ export type SpendResult =
   | { ok: false; reason: 'unconfigured' | 'insufficient' | 'remote_error' };
 
 function serviceConfig(env: Env): { url: string; key: string } | null {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  const key = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!env.SUPABASE_URL || !key) return null;
   return {
     url: env.SUPABASE_URL.replace(/\/$/, ''),
-    key: env.SUPABASE_SERVICE_ROLE_KEY,
+    key,
   };
 }
 
