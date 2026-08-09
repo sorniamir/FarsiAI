@@ -24,6 +24,9 @@ jobs:
       - name: Typecheck API and mobile
         run: npm run check
 
+      - name: Test Worker behavior
+        run: npm run test:api
+
       - name: Validate Cloudflare Worker bundle
         working-directory: apps/api
         run: npx wrangler deploy --dry-run

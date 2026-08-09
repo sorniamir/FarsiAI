@@ -1,33 +1,17 @@
 import type { Env } from '../types';
+import { supabaseAdminFetch } from './supabase-admin';
 
 export type SpendResult =
   | { ok: true; balance: number }
   | { ok: false; reason: 'unconfigured' | 'insufficient' | 'remote_error' };
-
-function serviceConfig(env: Env): { url: string; key: string } | null {
-  const key = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!env.SUPABASE_URL || !key) return null;
-  return {
-    url: env.SUPABASE_URL.replace(/\/$/, ''),
-    key,
-  };
-}
 
 async function callRpc(
   env: Env,
   name: 'spend_credits' | 'refund_credits',
   body: Record<string, unknown>,
 ): Promise<Response | null> {
-  const config = serviceConfig(env);
-  if (!config) return null;
-
-  return fetch(`${config.url}/rest/v1/rpc/${name}`, {
+  return supabaseAdminFetch(env, `rpc/${name}`, {
     method: 'POST',
-    headers: {
-      apikey: config.key,
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
     body: JSON.stringify(body),
   });
 }

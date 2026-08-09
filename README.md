@@ -35,6 +35,7 @@
 ```bash
 npm install
 npm run check
+npm run test:api
 ```
 
 ### API
@@ -90,6 +91,10 @@ SUPABASE_SECRET_KEY=sb_secret_...
 
 Worker در `apps/api` قرار دارد. برای Workers Builds، repository را به Cloudflare متصل کن و Root directory را `apps/api` قرار بده. Production branch باید `main` باشد و deploy command می‌تواند همان `npx wrangler deploy` باشد.
 
+`keep_vars = true` در تنظیمات Worker فعال است؛ بنابراین مقادیر `SUPABASE_URL` و
+`SUPABASE_PUBLISHABLE_KEY` که در Dashboard وارد می‌شوند با Deploy بعدی حذف نمی‌شوند. Secretها نیز
+فقط در Cloudflare Secret storage نگهداری می‌شوند.
+
 Worker شامل:
 
 - Workers AI binding
@@ -100,6 +105,15 @@ Worker شامل:
 - Supabase access-token verification
 - server-side credit charging + automatic refund on AI failure
 - server-side conversation/message persistence
+
+پس از Deploy، health check را با آدرس Worker اجرا کن:
+
+```bash
+FARSIAI_API_URL=https://farsiai-api.<account>.workers.dev npm run smoke
+```
+
+برای اجرای یک درخواست واقعی Workers AI نیز `FARSIAI_SMOKE_AI=1` را اضافه کن. اگر
+`FARSIAI_ACCESS_TOKEN` تنظیم شود، smoke test با حساب کاربری اجرا می‌شود و یک Credit کم می‌کند.
 
 ## Credit Cost فعلی
 
@@ -123,4 +137,5 @@ Worker شامل:
 - Persistent authenticated conversations: آماده
 - Git-driven Supabase production workflow: آماده
 - Cloudflare Git deployment config: آماده اتصال
+- Worker behavior tests + production smoke test: آماده
 - Payment / Admin / بازکردن کامل گفتگوهای قدیمی از History / Streaming: مرحله بعد
