@@ -25,7 +25,9 @@
 - Guest Mode برای ورود سریع
 - Supabase Auth به‌صورت env-based
 - Credit Wallet و Ledger برای محدودیت مصرف و اشتراک آینده
-- Session کاربران لاگین‌شده همراه درخواست AI ارسال می‌شود
+- Session کاربران لاگین‌شده همراه درخواست AI ارسال و در Worker اعتبارسنجی می‌شود
+- Credit کاربران لاگین‌شده فقط از Backend کم/برگردانده می‌شود
+- Conversation و پیام‌های کاربران لاگین‌شده به‌صورت server-side ذخیره می‌شوند
 - Cloudflare Rate Limiting برای Chat و Image فعال است
 
 ## اجرای محلی
@@ -69,7 +71,20 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 EXPO_PUBLIC_API_URL=...
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` هرگز نباید وارد اپ موبایل یا Git شود.
+متغیرهای Worker:
+
+```env
+SUPABASE_URL=...
+SUPABASE_PUBLISHABLE_KEY=...
+```
+
+Secret سمت Worker، ترجیحاً کلید جدید Supabase:
+
+```text
+SUPABASE_SECRET_KEY=sb_secret_...
+```
+
+برای پروژه‌های legacy، `SUPABASE_SERVICE_ROLE_KEY` فقط به‌عنوان fallback پشتیبانی می‌شود. هیچ Secret privileged نباید وارد اپ موبایل یا Git شود.
 
 ## Cloudflare Deployment
 
@@ -78,10 +93,21 @@ Worker در `apps/api` قرار دارد. برای Workers Builds، repository �
 Worker شامل:
 
 - Workers AI binding
-- Chat rate limiter: 30 request/minute per actor
-- Image rate limiter: 6 request/minute per actor
+- Chat rate limiter: 30 request/minute per verified user / guest actor
+- Image rate limiter: 6 request/minute per verified user / guest actor
 - Workers Observability logs
 - structured logs بدون ذخیره متن Prompt
+- Supabase access-token verification
+- server-side credit charging + automatic refund on AI failure
+- server-side conversation/message persistence
+
+## Credit Cost فعلی
+
+- Chat: `1` Credit
+- Image: `20` Credits
+- Welcome balance: `150` Credits
+
+این اعداد فعلاً Product Defaults هستند و قبل از لانچ عمومی بر اساس مصرف واقعی AI قابل تنظیم‌اند.
 
 ## وضعیت v0.3
 
@@ -92,6 +118,9 @@ Worker شامل:
 - Supabase migrations + RLS: آماده
 - Migration CI: فعال
 - Worker rate limiting + observability: آماده
+- Auth token verification: آماده
+- Server-side credit charging/refunds: آماده
+- Persistent authenticated conversations: آماده
 - Git-driven Supabase production workflow: آماده
 - Cloudflare Git deployment config: آماده اتصال
-- Persistent AI conversation writes / server-side credit charging / Payment / Admin: مرحله بعد
+- Payment / Admin / بازکردن کامل گفتگوهای قدیمی از History / Streaming: مرحله بعد
