@@ -13,6 +13,7 @@ export type Env = {
   ALLOWED_ORIGIN?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
+  SUPABASE_SECRET_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
 
