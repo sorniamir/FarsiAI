@@ -3,6 +3,7 @@ import { runImage } from './ai/image';
 import { refundCredits, spendCredits } from './lib/credits';
 import { corsHeaders, json } from './lib/http';
 import { sanitizeText } from './lib/language';
+import { ensureConversation, saveMessage } from './lib/persistence';
 import { resolveAuth } from './lib/supabase-auth';
 import type { AiRequest, ConversationMessage, Env } from './types';
 
@@ -77,6 +78,8 @@ export default {
       }
 
       let creditsRemaining: number | undefined;
+      let conversationId: string | undefined;
+
       if (auth.kind === 'user') {
         const amount = CREDIT_COST[mode];
         const spend = await spendCredits(env, auth.user.id, amount, `ai_${mode}`, requestId);
@@ -93,6 +96,26 @@ export default {
 
         creditsRemaining = spend.balance;
         charged = { userId: auth.user.id, amount, mode };
+
+        try {
+          const persistedId = await ensureConversation(
+            env,
+            auth.user.id,
+            typeof payload.conversationId === 'string' ? payload.conversationId : undefined,
+            message,
+            mode,
+          );
+          if (persistedId) {
+            conversationId = persistedId;
+            await saveMessage(env, persistedId, auth.user.id, 'user', message);
+          }
+        } catch (persistenceError) {
+          console.error(JSON.stringify({
+            event: 'conversation_persist_exception',
+            requestId,
+            message: persistenceError instanceof Error ? persistenceError.message : 'unknown_persistence_error',
+          }));
+        }
       }
 
       console.log(JSON.stringify({
@@ -104,6 +127,25 @@ export default {
 
       if (mode === 'image') {
         const result = await runImage(env, message);
+
+        if (auth.kind === 'user' && conversationId) {
+          try {
+            await saveMessage(
+              env,
+              conversationId,
+              auth.user.id,
+              'assistant',
+              `تصویر ساخته شد. Prompt: ${sanitizeText(result.prompt, 3000)}`,
+            );
+          } catch (persistenceError) {
+            console.error(JSON.stringify({
+              event: 'assistant_persist_exception',
+              requestId,
+              message: persistenceError instanceof Error ? persistenceError.message : 'unknown_persistence_error',
+            }));
+          }
+        }
+
         charged = null;
         console.log(JSON.stringify({ event: 'ai_success', requestId, mode }));
         return json(env, {
@@ -112,13 +154,27 @@ export default {
           image: result.image,
           revisedPrompt: result.prompt,
           creditsRemaining,
+          conversationId,
         });
       }
 
       const text = await runChat(env, message, validHistory(payload.history));
+
+      if (auth.kind === 'user' && conversationId) {
+        try {
+          await saveMessage(env, conversationId, auth.user.id, 'assistant', sanitizeText(text, 12000));
+        } catch (persistenceError) {
+          console.error(JSON.stringify({
+            event: 'assistant_persist_exception',
+            requestId,
+            message: persistenceError instanceof Error ? persistenceError.message : 'unknown_persistence_error',
+          }));
+        }
+      }
+
       charged = null;
       console.log(JSON.stringify({ event: 'ai_success', requestId, mode }));
-      return json(env, { ok: true, mode: 'chat', text, creditsRemaining });
+      return json(env, { ok: true, mode: 'chat', text, creditsRemaining, conversationId });
     } catch (error) {
       if (charged) {
         try {
