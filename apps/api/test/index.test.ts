@@ -25,6 +25,14 @@ function aiRequest(body: unknown, headers: Record<string, string> = {}): Request
   });
 }
 
+function agentRequest(body: unknown, headers: Record<string, string> = {}): Request {
+  return new Request('https://api.example.com/v1/agent/plan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
 describe('FarsiAI Worker', () => {
   beforeEach(() => {
     mock.method(console, 'log', () => undefined);
@@ -41,8 +49,16 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.4' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.0' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
+  });
+
+  it('requires an authenticated user for Codex planning', async () => {
+    const env = createEnv();
+    const response = await worker.fetch(agentRequest({ task: 'inspect the project', workspace: 'workspace' }), env);
+
+    assert.equal(response.status, 401);
+    assert.equal(env.AI.run.mock.callCount(), 0);
   });
 
   it('rejects malformed JSON and unsupported modes as client errors', async () => {
@@ -250,4 +266,3 @@ describe('Supabase admin authentication', () => {
     assert.deepEqual(result, { ok: false, reason: 'chat_limit' });
   });
 });
-
