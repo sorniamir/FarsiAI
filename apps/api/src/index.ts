@@ -1,4 +1,5 @@
 import { handleAgentPlan } from './ai/agent';
+import { attachmentContext, firstImageAttachment, normalizeAttachments } from './ai/attachments';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
 import {
@@ -25,6 +26,27 @@ function validHistory(value: unknown): ConversationMessage[] {
     )
     .slice(-10)
     .map((item) => ({ role: item.role, content: sanitizeText(item.content, 3000) }));
+}
+
+function attachmentValidationError(error: unknown): string | null {
+  const code = error instanceof Error ? error.message : '';
+  const messages: Record<string, string> = {
+    ATTACHMENTS_INVALID: 'ساختار فایل‌های ضمیمه معتبر نیست.',
+    ATTACHMENTS_TOO_MANY: 'حداکثر ۴ فایل را می‌توان هم‌زمان ارسال کرد.',
+    ATTACHMENT_INVALID: 'یکی از فایل‌های ضمیمه معتبر نیست.',
+    ATTACHMENT_INVALID_DATA: 'داده یکی از فایل‌های ضمیمه قابل خواندن نیست.',
+    ATTACHMENT_UNSUPPORTED: 'نوع یکی از فایل‌های ضمیمه پشتیبانی نمی‌شود.',
+    ATTACHMENT_TOO_LARGE: 'حجم هر فایل باید حداکثر ۶ مگابایت باشد.',
+    ATTACHMENTS_TOO_LARGE: 'مجموع حجم فایل‌های ضمیمه باید حداکثر ۱۲ مگابایت باشد.',
+  };
+  return messages[code] ?? null;
+}
+
+function attachmentRuntimeError(error: unknown): string | null {
+  const code = error instanceof Error ? error.message : '';
+  if (code === 'ATTACHMENT_CONVERSION_UNAVAILABLE') return 'پردازش فایل روی سرور در حال حاضر فعال نیست.';
+  if (code === 'ATTACHMENT_CONVERSION_FAILED') return 'محتوای فایل ضمیمه قابل استخراج نبود. فایل دیگری امتحان کنید.';
+  return attachmentValidationError(error);
 }
 
 async function guestActorKey(request: Request): Promise<string> {
@@ -71,7 +93,7 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.1' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.6' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
@@ -108,9 +130,36 @@ export default {
         return json(env, { ok: false, error: 'حالت درخواست باید chat یا image باشد.' }, 400);
       }
 
-      const message = sanitizeText(payload.message, 6000);
+      let attachments;
+      try {
+        attachments = normalizeAttachments(payload.attachments);
+      } catch (error) {
+        return json(env, { ok: false, error: attachmentValidationError(error) || 'فایل ضمیمه معتبر نیست.' }, 400);
+      }
+
       const mode = payload.mode;
-      if (!message) return json(env, { ok: false, error: 'پیام خالی است.' }, 400);
+      const message = sanitizeText(payload.message, 6000);
+      if (mode === 'image' && !message) {
+        return json(env, { ok: false, error: 'برای ساخت یا ویرایش تصویر، توضیح درخواست لازم است.' }, 400);
+      }
+      if (mode === 'chat' && !message && attachments.length === 0) {
+        return json(env, { ok: false, error: 'پیام یا فایل ضمیمه لازم است.' }, 400);
+      }
+
+      const effectiveMessage = message || 'فایل‌های ضمیمه‌شده را بررسی کن و نکات مهم را توضیح بده.';
+      const imageAction = payload.imageAction === 'edit' ? 'edit' : 'generate';
+      const explicitReference = typeof payload.referenceImage === 'string' ? payload.referenceImage : undefined;
+      const attachedReference = firstImageAttachment(attachments)?.dataUrl;
+      const referenceImage = mode === 'image' && imageAction === 'edit'
+        ? explicitReference || attachedReference
+        : undefined;
+      if (mode === 'image' && imageAction === 'edit' && !referenceImage) {
+        return json(env, { ok: false, error: 'برای ویرایش تصویر باید روی یک تصویر ریپلای کنید یا یک تصویر ضمیمه کنید.' }, 400);
+      }
+
+      const referencePrompt = imageAction === 'edit' && typeof payload.referencePrompt === 'string'
+        ? sanitizeText(payload.referencePrompt, 3000)
+        : undefined;
 
       const auth = await resolveAuth(request, env);
       if (auth.kind === 'invalid') {
@@ -156,12 +205,15 @@ export default {
             env,
             auth.user.id,
             typeof payload.conversationId === 'string' ? payload.conversationId : undefined,
-            message,
+            effectiveMessage,
             mode,
           );
           if (persistedId) {
             conversationId = persistedId;
-            await saveMessage(env, persistedId, auth.user.id, 'user', message);
+            const attachmentNames = attachments.length
+              ? `\n[ضمیمه: ${attachments.map((item) => item.name).join('، ')}]`
+              : '';
+            await saveMessage(env, persistedId, auth.user.id, 'user', `${effectiveMessage}${attachmentNames}`);
           }
         } catch (persistenceError) {
           console.error(JSON.stringify({
@@ -192,15 +244,13 @@ export default {
         event: 'ai_request',
         requestId,
         mode,
+        imageAction: mode === 'image' ? imageAction : undefined,
+        attachments: attachments.length,
         authenticated: auth.kind === 'user',
       }));
 
       if (mode === 'image') {
-        const referenceImage = typeof payload.referenceImage === 'string' ? payload.referenceImage : undefined;
-        const referencePrompt = typeof payload.referencePrompt === 'string'
-          ? sanitizeText(payload.referencePrompt, 3000)
-          : undefined;
-        const result = await runImage(env, message, referenceImage, referencePrompt);
+        const result = await runImage(env, effectiveMessage, referenceImage, referencePrompt);
 
         if (auth.kind === 'user' && conversationId) {
           try {
@@ -209,7 +259,8 @@ export default {
               conversationId,
               auth.user.id,
               'assistant',
-              `تصویر ساخته شد. Prompt: ${sanitizeText(result.prompt, 3000)}`,
+              result.edited ? 'ویرایش تصویر آماده شد.' : 'تصویر آماده شد.',
+              result.image,
             );
           } catch (persistenceError) {
             console.error(JSON.stringify({
@@ -221,19 +272,21 @@ export default {
         }
 
         charged = null;
-        console.log(JSON.stringify({ event: 'ai_success', requestId, mode }));
+        console.log(JSON.stringify({ event: 'ai_success', requestId, mode, provider: result.provider }));
         return json(env, {
           ok: true,
           mode: 'image',
           image: result.image,
           revisedPrompt: result.prompt,
           edited: result.edited,
+          provider: result.provider,
           quota,
           conversationId,
         });
       }
 
-      const text = await runChat(env, message, validHistory(payload.history));
+      const convertedAttachments = attachments.length ? await attachmentContext(env, attachments) : '';
+      const text = await runChat(env, effectiveMessage, validHistory(payload.history), convertedAttachments);
 
       if (auth.kind === 'user' && conversationId) {
         try {
@@ -267,11 +320,15 @@ export default {
         }
       }
 
+      const attachmentError = attachmentRuntimeError(error);
       console.error(JSON.stringify({
         event: 'ai_error',
         requestId,
         message: error instanceof Error ? error.message : 'unknown_error',
       }));
+      if (attachmentError) {
+        return json(env, { ok: false, error: attachmentError }, 422);
+      }
       return json(
         env,
         { ok: false, error: 'سرویس هوش مصنوعی موقتاً در دسترس نیست. لطفاً دوباره تلاش کنید.' },
