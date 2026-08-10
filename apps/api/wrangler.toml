@@ -10,14 +10,6 @@ binding = "AI"
 [observability]
 enabled = true
 
-[[durable_objects.bindings]]
-name = "GUEST_QUOTA"
-class_name = "GuestQuotaDurableObject"
-
-[exports.GuestQuotaDurableObject]
-type = "durable-object"
-storage = "sqlite"
-
 [[ratelimits]]
 name = "API_RATE_LIMITER"
 namespace_id = "9203101"
