@@ -31,6 +31,7 @@ const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const messageCache = new Map<string, CachedMessages>();
 const inFlightMessages = new Map<string, Promise<StoredMessage[]>>();
 const conversationVersions = new Map<string, string>();
+let prefetchPromise: Promise<void> | null = null;
 
 function isFresh(entry: CachedMessages | undefined): entry is CachedMessages {
   return !!entry && Date.now() - entry.cachedAt < MESSAGE_CACHE_TTL_MS;
@@ -65,15 +66,45 @@ async function fetchConversationMessages(conversationId: string): Promise<Stored
 }
 
 async function prefetchRecentConversations(conversations: ConversationSummary[]): Promise<void> {
-  const candidates = conversations
-    .slice(0, 6)
-    .filter((item) => !isFresh(messageCache.get(item.id)) && !inFlightMessages.has(item.id));
+  if (!supabase || prefetchPromise) return prefetchPromise ?? Promise.resolve();
 
-  // Keep background work gentle: only two requests at a time.
-  for (let index = 0; index < candidates.length; index += 2) {
-    const batch = candidates.slice(index, index + 2);
-    await Promise.allSettled(batch.map((item) => getConversationMessages(item.id)));
-  }
+  const ids = conversations
+    .slice(0, 6)
+    .map((item) => item.id)
+    .filter((id) => !isFresh(messageCache.get(id)) && !inFlightMessages.has(id));
+
+  if (ids.length === 0) return;
+
+  prefetchPromise = (async () => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id,conversation_id,role,content,image_url,created_at')
+      .in('conversation_id', ids)
+      .order('created_at', { ascending: true })
+      .limit(1200);
+
+    if (error || !data) return;
+
+    const grouped = new Map<string, any[]>();
+    for (const id of ids) grouped.set(id, []);
+    for (const row of data) {
+      const conversationId = String(row.conversation_id ?? '');
+      const bucket = grouped.get(conversationId);
+      if (bucket) bucket.push(row);
+    }
+
+    const cachedAt = Date.now();
+    for (const id of ids) {
+      messageCache.set(id, {
+        messages: mapStoredMessages(grouped.get(id) ?? []),
+        cachedAt,
+      });
+    }
+  })().finally(() => {
+    prefetchPromise = null;
+  });
+
+  return prefetchPromise;
 }
 
 export function invalidateConversationMessages(conversationId?: string): void {
@@ -85,6 +116,7 @@ export function clearConversationMessageCache(): void {
   messageCache.clear();
   inFlightMessages.clear();
   conversationVersions.clear();
+  prefetchPromise = null;
 }
 
 export async function getAccountSnapshot(): Promise<AccountSnapshot> {
@@ -145,7 +177,7 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     conversationVersions.set(conversation.id, conversation.updatedAt);
   }
 
-  // Warm recent conversations without blocking the History list itself.
+  // One background query warms the six most recent conversations.
   void prefetchRecentConversations(conversations);
   return conversations;
 }
