@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { listConversations, type ConversationSummary } from '../services/history';
-import { theme } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
 
-export function HistoryScreen({ onOpenChat }: { onOpenChat: () => void }) {
+export function HistoryScreen({ onOpenChat }: { onOpenChat: (conversationId?: string) => void }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [items, setItems] = useState<ConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +24,7 @@ export function HistoryScreen({ onOpenChat }: { onOpenChat: () => void }) {
           <Text style={styles.title}>تاریخچه</Text>
           <Text style={styles.subtitle}>گفتگوها و تصاویر قبلی</Text>
         </View>
-        <TouchableOpacity style={styles.newButton} onPress={onOpenChat}><Text style={styles.newText}>+ چت جدید</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.newButton} onPress={() => onOpenChat()}><Text style={styles.newText}>+ چت جدید</Text></TouchableOpacity>
       </View>
 
       <View style={styles.search}><Text style={styles.searchText}>⌕  جستجو در گفتگوها</Text></View>
@@ -34,12 +37,12 @@ export function HistoryScreen({ onOpenChat }: { onOpenChat: () => void }) {
           <Text style={styles.emptyIcon}>◌</Text>
           <Text style={styles.emptyTitle}>هنوز گفتگویی ذخیره نشده</Text>
           <Text style={styles.emptyText}>اولین گفتگوی تو بعد از اتصال حساب کاربری و ذخیره‌سازی، اینجا ظاهر می‌شود.</Text>
-          <TouchableOpacity style={styles.emptyButton} onPress={onOpenChat}><Text style={styles.emptyButtonText}>شروع گفتگو</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.emptyButton} onPress={() => onOpenChat()}><Text style={styles.emptyButtonText}>شروع گفتگو</Text></TouchableOpacity>
         </View>
       ) : (
         <View style={styles.list}>
           {items.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.row} onPress={onOpenChat} activeOpacity={0.82}>
+            <TouchableOpacity key={item.id} style={styles.row} onPress={() => onOpenChat(item.id)} activeOpacity={0.82}>
               <View style={styles.rowIcon}><Text style={styles.rowIconText}>{item.mode === 'image' ? '🎨' : '💬'}</Text></View>
               <View style={styles.rowCopy}>
                 <View style={styles.rowHead}>
@@ -62,14 +65,14 @@ function formatDate(value: string) {
   return date.toLocaleDateString('fa-IR', { month: 'short', day: 'numeric' });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: 20, paddingBottom: 30 },
   top: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   title: { color: theme.colors.text, fontSize: 27, fontWeight: '900', textAlign: 'right' },
   subtitle: { color: theme.colors.textMuted, fontSize: 12, marginTop: 4, textAlign: 'right' },
   newButton: { backgroundColor: theme.colors.primary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
-  newText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  newText: { color: theme.colors.onAccent, fontSize: 12, fontWeight: '900' },
   search: { borderRadius: 17, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, paddingHorizontal: 15, paddingVertical: 14, marginBottom: 22 },
   searchText: { color: theme.colors.textDim, textAlign: 'right' },
   section: { color: theme.colors.textMuted, textAlign: 'right', fontWeight: '800', marginBottom: 10 },

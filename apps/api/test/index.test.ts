@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import worker from '../src/index';
-import { spendCredits } from '../src/lib/credits';
+import { spendDailyQuota } from '../src/lib/credits';
 import type { Env } from '../src/types';
 
 const originalFetch = globalThis.fetch;
@@ -40,7 +40,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.0' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.1' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -87,13 +87,13 @@ describe('FarsiAI Worker', () => {
       calls.push({ url, body });
 
       if (url.endsWith('/auth/v1/user')) return Response.json({ id: 'user-1', email: 'user@example.com' });
-      if (url.endsWith('/rpc/spend_credits')) return Response.json(149);
+      if (url.endsWith('/rpc/use_daily_quota')) return Response.json({ chatRemaining: 9, imageRemaining: 4 });
       if (url.endsWith('/conversations?select=id')) {
         return Response.json([{ id: '11111111-1111-1111-1111-111111111111' }], { status: 201 });
       }
       if (url.endsWith('/messages')) return new Response(null, { status: 201 });
       if (url.includes('/conversations?id=eq.')) return new Response(null, { status: 204 });
-      if (url.endsWith('/rpc/refund_credits')) return Response.json(150);
+      if (url.endsWith('/rpc/refund_daily_quota')) return Response.json({ chatRemaining: 10, imageRemaining: 4 });
       throw new Error(`Unexpected fetch: ${url}`);
     });
     globalThis.fetch = mockFetch;
@@ -113,13 +113,11 @@ describe('FarsiAI Worker', () => {
     );
 
     assert.equal(response.status, 500);
-    assert.ok(calls.some(({ url }) => url.endsWith('/rpc/spend_credits')));
-    assert.deepEqual(calls.find(({ url }) => url.endsWith('/rpc/refund_credits')), {
-      url: 'https://project.supabase.co/rest/v1/rpc/refund_credits',
+    assert.ok(calls.some(({ url }) => url.endsWith('/rpc/use_daily_quota')));
+    assert.deepEqual(calls.find(({ url }) => url.endsWith('/rpc/refund_daily_quota')), {
+      url: 'https://project.supabase.co/rest/v1/rpc/refund_daily_quota',
       body: {
         p_user_id: 'user-1',
-        p_amount: 1,
-        p_reason: 'ai_refund_chat',
         p_reference_id: 'test-ray',
       },
     });
@@ -133,21 +131,20 @@ describe('Supabase admin authentication', () => {
   });
 
   it('adds a bearer header for a legacy service-role JWT', async () => {
-    const mockFetch = mock.fn(async () => Response.json(149));
+    const mockFetch = mock.fn(async () => Response.json({ chatRemaining: 9, imageRemaining: 4 }));
     globalThis.fetch = mockFetch;
 
-    const result = await spendCredits(
+    const result = await spendDailyQuota(
       createEnv({
         SUPABASE_URL: 'https://project.supabase.co/',
         SUPABASE_SERVICE_ROLE_KEY: 'legacy-service-role-jwt',
       }),
       'user-1',
-      1,
-      'ai_chat',
+      'chat',
       'request-1',
     );
 
-    assert.deepEqual(result, { ok: true, balance: 149 });
+    assert.deepEqual(result, { ok: true, quota: { chatRemaining: 9, imageRemaining: 4, resetsAt: undefined } });
     const [, init] = mockFetch.mock.calls[0].arguments as [string, RequestInit];
     const headers = new Headers(init.headers);
     assert.equal(headers.get('apikey'), 'legacy-service-role-jwt');
@@ -155,17 +152,16 @@ describe('Supabase admin authentication', () => {
   });
 
   it('uses only apikey for a modern Supabase secret key', async () => {
-    const mockFetch = mock.fn(async () => Response.json(149));
+    const mockFetch = mock.fn(async () => Response.json({ chatRemaining: 9, imageRemaining: 4 }));
     globalThis.fetch = mockFetch;
 
-    await spendCredits(
+    await spendDailyQuota(
       createEnv({
         SUPABASE_URL: 'https://project.supabase.co',
         SUPABASE_SECRET_KEY: 'sb_secret_test',
       }),
       'user-1',
-      1,
-      'ai_chat',
+      'chat',
       'request-1',
     );
 
@@ -173,5 +169,24 @@ describe('Supabase admin authentication', () => {
     const headers = new Headers(init.headers);
     assert.equal(headers.get('apikey'), 'sb_secret_test');
     assert.equal(headers.has('authorization'), false);
+  });
+
+  it('maps exhausted daily chat quota to a client-safe limit result', async () => {
+    globalThis.fetch = mock.fn(async () => Response.json(
+      { code: 'P0001', message: 'daily_chat_limit' },
+      { status: 400 },
+    ));
+
+    const result = await spendDailyQuota(
+      createEnv({
+        SUPABASE_URL: 'https://project.supabase.co',
+        SUPABASE_SECRET_KEY: 'sb_secret_test',
+      }),
+      'user-1',
+      'chat',
+      'request-limit',
+    );
+
+    assert.deepEqual(result, { ok: false, reason: 'chat_limit' });
   });
 });

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
 
 export type MainTab = 'chat' | 'history' | 'profile';
 
@@ -11,6 +12,8 @@ const tabs: { id: MainTab; icon: string; label: string }[] = [
 ];
 
 export function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (tab: MainTab) => void }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.wrap}>
       {tabs.map((item) => {
@@ -26,11 +29,11 @@ export function BottomNav({ tab, onChange }: { tab: MainTab; onChange: (tab: Mai
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   wrap: { flexDirection: 'row-reverse', backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, paddingBottom: 8 },
   item: { flex: 1, alignItems: 'center', gap: 3 },
   iconWrap: { width: 34, height: 28, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  iconActive: { backgroundColor: 'rgba(139,92,246,0.14)' },
+  iconActive: { backgroundColor: theme.colors.accentSoft },
   icon: { color: theme.colors.textDim, fontSize: 17, fontWeight: '900' },
   label: { color: theme.colors.textDim, fontSize: 10, fontWeight: '800' },
   active: { color: theme.colors.primaryBright },

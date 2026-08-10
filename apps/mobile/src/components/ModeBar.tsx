@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
 import type { AppMode } from '../types';
 
 const items: Array<{ mode: AppMode; label: string; icon: string; badge?: string }> = [
@@ -10,6 +11,8 @@ const items: Array<{ mode: AppMode; label: string; icon: string; badge?: string 
 ];
 
 export function ModeBar({ mode, onChange }: { mode: AppMode; onChange: (mode: AppMode) => void }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.bar}>
       {items.map((item) => {
@@ -26,7 +29,7 @@ export function ModeBar({ mode, onChange }: { mode: AppMode; onChange: (mode: Ap
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   bar: {
     marginHorizontal: 16,
     padding: 4,

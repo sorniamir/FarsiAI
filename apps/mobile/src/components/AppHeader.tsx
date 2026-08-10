@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '../theme';
-import type { AppMode } from '../types';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
+import type { AppMode, DailyQuota } from '../types';
 
 const subtitles: Record<AppMode, string> = {
   chat: 'دستیار هوشمند فارسی',
@@ -9,26 +10,28 @@ const subtitles: Record<AppMode, string> = {
   video: 'نسل بعدی ابزارهای خلاقانه',
 };
 
-export function AppHeader({ credits, mode }: { credits: number; mode: AppMode }) {
+export function AppHeader({ quota, mode }: { quota: DailyQuota; mode: AppMode }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.header}>
       <View>
         <View style={styles.brandRow}>
           <View style={styles.logo}><Text style={styles.logoText}>✦</Text></View>
-          <Text style={styles.brand}>FarsiAI</Text>
+          <View style={styles.wordmark}><Text style={styles.brandFarsi}>Farsi</Text><Text style={styles.brandAi}>Ai</Text></View>
           <View style={styles.beta}><Text style={styles.betaText}>BETA</Text></View>
         </View>
         <Text style={styles.subtitle}>{subtitles[mode]}</Text>
       </View>
       <View style={styles.creditPill}>
         <Text style={styles.creditIcon}>◆</Text>
-        <Text style={styles.creditText}>{credits}</Text>
+        <Text style={styles.creditText}>{quota.chatRemaining} پیام · {quota.imageRemaining} تصویر</Text>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   header: {
     paddingHorizontal: 18,
     paddingTop: 12,
@@ -46,9 +49,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  brand: { color: theme.colors.text, fontSize: 22, fontWeight: '800' },
-  beta: { borderRadius: 8, backgroundColor: 'rgba(34,211,238,0.12)', paddingHorizontal: 7, paddingVertical: 4 },
+  logoText: { color: theme.colors.onAccent, fontSize: 18, fontWeight: '900' },
+  wordmark: { flexDirection: 'row', alignItems: 'baseline' },
+  brandFarsi: { color: theme.colors.primaryBright, fontSize: 22, fontWeight: '900' },
+  brandAi: { color: theme.mode === 'dark' ? '#FFFFFF' : '#000000', fontSize: 22, fontWeight: '900' },
+  beta: { borderRadius: 8, backgroundColor: theme.colors.accentSoft, paddingHorizontal: 7, paddingVertical: 4 },
   betaText: { color: theme.colors.cyan, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   subtitle: { color: theme.colors.textMuted, fontSize: 12, marginTop: 6, textAlign: 'right' },
   creditPill: {

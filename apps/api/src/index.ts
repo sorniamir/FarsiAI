@@ -1,16 +1,11 @@
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
-import { refundCredits, spendCredits } from './lib/credits';
+import { refundDailyQuota, spendDailyQuota } from './lib/credits';
 import { corsHeaders, json } from './lib/http';
 import { sanitizeText } from './lib/language';
 import { ensureConversation, saveMessage } from './lib/persistence';
 import { resolveAuth } from './lib/supabase-auth';
 import type { AiRequest, ConversationMessage, Env } from './types';
-
-const CREDIT_COST = {
-  chat: 1,
-  image: 20,
-} as const;
 
 function validHistory(value: unknown): ConversationMessage[] {
   if (!Array.isArray(value)) return [];
@@ -38,14 +33,14 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const requestId = request.headers.get('cf-ray') || crypto.randomUUID();
-    let charged: { userId: string; amount: number; mode: 'chat' | 'image' } | null = null;
+    let charged: { userId: string; requestId: string } | null = null;
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.3.0' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.3.1' });
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/ai') {
@@ -86,16 +81,18 @@ export default {
         return json(env, { ok: false, error: 'تعداد درخواست‌ها زیاد شده. کمی بعد دوباره تلاش کنید.' }, 429);
       }
 
-      let creditsRemaining: number | undefined;
+      let quota: { chatRemaining: number; imageRemaining: number; resetsAt?: string } | undefined;
       let conversationId: string | undefined;
 
       if (auth.kind === 'user') {
-        const amount = CREDIT_COST[mode];
-        const spend = await spendCredits(env, auth.user.id, amount, `ai_${mode}`, requestId);
+        const spend = await spendDailyQuota(env, auth.user.id, mode, requestId);
 
         if (!spend.ok) {
-          if (spend.reason === 'insufficient') {
-            return json(env, { ok: false, error: 'اعتبار کافی برای این درخواست ندارید.' }, 402);
+          if (spend.reason === 'chat_limit') {
+            return json(env, { ok: false, error: 'سهمیه ۱۰ پیام امروز تمام شده است. فردا دوباره شارژ می‌شود.' }, 402);
+          }
+          if (spend.reason === 'image_limit') {
+            return json(env, { ok: false, error: 'سهمیه ۴ تصویر امروز تمام شده است. فردا دوباره شارژ می‌شود.' }, 402);
           }
           if (spend.reason === 'unconfigured') {
             return json(env, { ok: false, error: 'سیستم اعتبار سرور هنوز تنظیم نشده است.' }, 503);
@@ -103,8 +100,8 @@ export default {
           return json(env, { ok: false, error: 'بررسی اعتبار موقتاً در دسترس نیست.' }, 503);
         }
 
-        creditsRemaining = spend.balance;
-        charged = { userId: auth.user.id, amount, mode };
+        quota = spend.quota;
+        charged = { userId: auth.user.id, requestId };
 
         try {
           const persistedId = await ensureConversation(
@@ -135,7 +132,11 @@ export default {
       }));
 
       if (mode === 'image') {
-        const result = await runImage(env, message);
+        const referenceImage = typeof payload.referenceImage === 'string' ? payload.referenceImage : undefined;
+        const referencePrompt = typeof payload.referencePrompt === 'string'
+          ? sanitizeText(payload.referencePrompt, 3000)
+          : undefined;
+        const result = await runImage(env, message, referenceImage, referencePrompt);
 
         if (auth.kind === 'user' && conversationId) {
           try {
@@ -162,7 +163,8 @@ export default {
           mode: 'image',
           image: result.image,
           revisedPrompt: result.prompt,
-          creditsRemaining,
+          edited: result.edited,
+          quota,
           conversationId,
         });
       }
@@ -183,17 +185,11 @@ export default {
 
       charged = null;
       console.log(JSON.stringify({ event: 'ai_success', requestId, mode }));
-      return json(env, { ok: true, mode: 'chat', text, creditsRemaining, conversationId });
+      return json(env, { ok: true, mode: 'chat', text, quota, conversationId });
     } catch (error) {
       if (charged) {
         try {
-          await refundCredits(
-            env,
-            charged.userId,
-            charged.amount,
-            `ai_refund_${charged.mode}`,
-            requestId,
-          );
+          await refundDailyQuota(env, charged.userId, charged.requestId);
         } catch (refundError) {
           console.error(JSON.stringify({
             event: 'credit_refund_exception',

@@ -1,70 +1,66 @@
 import type { Env } from '../types';
 import { supabaseAdminFetch } from './supabase-admin';
 
-export type SpendResult =
-  | { ok: true; balance: number }
-  | { ok: false; reason: 'unconfigured' | 'insufficient' | 'remote_error' };
+export type DailyQuota = {
+  chatRemaining: number;
+  imageRemaining: number;
+  resetsAt?: string;
+};
 
-async function callRpc(
-  env: Env,
-  name: 'spend_credits' | 'refund_credits',
-  body: Record<string, unknown>,
-): Promise<Response | null> {
-  return supabaseAdminFetch(env, `rpc/${name}`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+export type SpendResult =
+  | { ok: true; quota: DailyQuota }
+  | { ok: false; reason: 'unconfigured' | 'chat_limit' | 'image_limit' | 'remote_error' };
+
+function parseQuota(payload: unknown): DailyQuota | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const value = payload as Record<string, unknown>;
+  const chatRemaining = Number(value.chatRemaining);
+  const imageRemaining = Number(value.imageRemaining);
+  if (!Number.isFinite(chatRemaining) || !Number.isFinite(imageRemaining)) return null;
+  return {
+    chatRemaining: Math.max(0, chatRemaining),
+    imageRemaining: Math.max(0, imageRemaining),
+    resetsAt: typeof value.resetsAt === 'string' ? value.resetsAt : undefined,
+  };
 }
 
-export async function spendCredits(
+export async function spendDailyQuota(
   env: Env,
   userId: string,
-  amount: number,
-  reason: string,
+  mode: 'chat' | 'image',
   referenceId: string,
 ): Promise<SpendResult> {
-  const response = await callRpc(env, 'spend_credits', {
-    p_user_id: userId,
-    p_amount: amount,
-    p_reason: reason,
-    p_reference_id: referenceId,
+  const request = supabaseAdminFetch(env, 'rpc/use_daily_quota', {
+    method: 'POST',
+    body: JSON.stringify({ p_user_id: userId, p_mode: mode, p_reference_id: referenceId }),
   });
-
-  if (!response) return { ok: false, reason: 'unconfigured' };
-
+  if (!request) return { ok: false, reason: 'unconfigured' };
+  const response = await request;
   if (!response.ok) {
     const text = await response.text();
-    if (text.includes('insufficient_credits')) return { ok: false, reason: 'insufficient' };
-    console.error(JSON.stringify({ event: 'credit_spend_failed', status: response.status }));
+    if (text.includes('daily_chat_limit')) return { ok: false, reason: 'chat_limit' };
+    if (text.includes('daily_image_limit')) return { ok: false, reason: 'image_limit' };
+    console.error(JSON.stringify({ event: 'daily_quota_spend_failed', status: response.status, detail: text.slice(0, 300) }));
     return { ok: false, reason: 'remote_error' };
   }
-
-  const payload = (await response.json()) as unknown;
-  const balance = typeof payload === 'number' ? payload : Number(payload);
-  if (!Number.isFinite(balance)) return { ok: false, reason: 'remote_error' };
-
-  return { ok: true, balance };
+  const quota = parseQuota(await response.json());
+  return quota ? { ok: true, quota } : { ok: false, reason: 'remote_error' };
 }
 
-export async function refundCredits(
+export async function refundDailyQuota(
   env: Env,
   userId: string,
-  amount: number,
-  reason: string,
   referenceId: string,
 ): Promise<boolean> {
-  const response = await callRpc(env, 'refund_credits', {
-    p_user_id: userId,
-    p_amount: amount,
-    p_reason: reason,
-    p_reference_id: referenceId,
+  const request = supabaseAdminFetch(env, 'rpc/refund_daily_quota', {
+    method: 'POST',
+    body: JSON.stringify({ p_user_id: userId, p_reference_id: referenceId }),
   });
-
-  if (!response) return false;
+  if (!request) return false;
+  const response = await request;
   if (!response.ok) {
-    console.error(JSON.stringify({ event: 'credit_refund_failed', status: response.status }));
+    console.error(JSON.stringify({ event: 'daily_quota_refund_failed', status: response.status }));
     return false;
   }
-
   return true;
 }

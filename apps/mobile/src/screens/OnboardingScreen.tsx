@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
 
 export function OnboardingScreen({ onContinue }: { onContinue: () => void }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.badge}><Text style={styles.badgeText}>FarsiAI • Beta</Text></View>
@@ -25,6 +28,8 @@ export function OnboardingScreen({ onContinue }: { onContinue: () => void }) {
 }
 
 function Feature({ icon, title, text }: { icon: string; title: string; text: string }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.card}>
       <View style={styles.icon}><Text style={styles.iconText}>{icon}</Text></View>
@@ -36,7 +41,7 @@ function Feature({ icon, title, text }: { icon: string; title: string; text: str
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: { flexGrow: 1, backgroundColor: theme.colors.background, padding: 24, paddingTop: 56, justifyContent: 'center' },
   badge: { alignSelf: 'center', borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, marginBottom: 24 },
   badgeText: { color: theme.colors.primaryBright, fontSize: 12, fontWeight: '800' },
@@ -51,6 +56,6 @@ const styles = StyleSheet.create({
   cardTitle: { color: theme.colors.text, textAlign: 'right', fontSize: 15, fontWeight: '900' },
   cardText: { color: theme.colors.textMuted, textAlign: 'right', fontSize: 12, lineHeight: 20, marginTop: 4, writingDirection: 'rtl' },
   primary: { backgroundColor: theme.colors.primary, borderRadius: 20, alignItems: 'center', paddingVertical: 16, marginTop: 28 },
-  primaryText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  primaryText: { color: theme.colors.onAccent, fontWeight: '900', fontSize: 16 },
   note: { color: theme.colors.textDim, textAlign: 'center', marginTop: 13, fontSize: 12 },
 });

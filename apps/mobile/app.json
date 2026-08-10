@@ -1,22 +1,38 @@
 {
   "expo": {
-    "name": "FarsiAI",
-    "slug": "farsiai",
+    "name": "FarsiAi",
+    "owner": "sorniamirs-team",
+    "slug": "amir-sorni",
     "scheme": "farsiai",
-    "version": "0.2.0",
+    "version": "0.3.1",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "splash": {
-      "backgroundColor": "#070A12",
+      "image": "./assets/icon.png",
+      "backgroundColor": "#000000",
       "resizeMode": "contain"
     },
     "android": {
       "package": "ai.farsiai.app",
-      "adaptiveIcon": { "backgroundColor": "#070A12" }
+      "versionCode": 5,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": ["READ_MEDIA_IMAGES"]
     },
     "ios": {
       "bundleIdentifier": "ai.farsiai.app",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryAddUsageDescription": "FarsiAI برای ذخیره تصویر ساخته‌شده به گالری نیاز به دسترسی دارد."
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "447d278b-46a6-4f9a-821a-63e0c2b1d9ad"
+      }
     }
   }
 }

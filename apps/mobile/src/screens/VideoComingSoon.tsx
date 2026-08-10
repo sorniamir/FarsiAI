@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../ThemeProvider';
+import type { AppTheme } from '../theme';
 
 export function VideoComingSoon() {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.wrap}>
       <View style={styles.orb}><Text style={styles.orbText}>▶</Text></View>
@@ -13,7 +16,7 @@ export function VideoComingSoon() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
   orb: {
     width: 88,

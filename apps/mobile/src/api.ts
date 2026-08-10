@@ -1,4 +1,5 @@
 import { supabase } from './lib/supabase';
+import type { DailyQuota } from './types';
 
 export type AiMode = 'chat' | 'image';
 
@@ -8,13 +9,14 @@ export type ApiMessage = {
 };
 
 export type AiResponse =
-  | { ok: true; mode: 'chat'; text: string; creditsRemaining?: number; conversationId?: string }
+  | { ok: true; mode: 'chat'; text: string; quota?: DailyQuota; conversationId?: string }
   | {
       ok: true;
       mode: 'image';
       image: string;
       revisedPrompt?: string;
-      creditsRemaining?: number;
+      edited?: boolean;
+      quota?: DailyQuota;
       conversationId?: string;
     }
   | { ok: false; error: string };
@@ -26,6 +28,8 @@ export async function sendAiRequest(input: {
   message: string;
   history: ApiMessage[];
   conversationId?: string;
+  referenceImage?: string;
+  referencePrompt?: string;
 }): Promise<AiResponse> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
 

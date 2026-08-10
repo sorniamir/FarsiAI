@@ -28,7 +28,14 @@ export async function runChat(
 ): Promise<string> {
   const wantsPersian = containsPersian(userText);
   const englishInput = wantsPersian ? await translate(env, userText, 'fa', 'en') : userText;
-  const normalizedHistory = normalizeHistory(history);
+  const normalizedHistory = await Promise.all(
+    normalizeHistory(history).map(async (item) => ({
+      ...item,
+      content: containsPersian(item.content)
+        ? await translate(env, item.content, 'fa', 'en')
+        : item.content,
+    })),
+  );
 
   const result = await env.AI.run(CHAT_MODEL, {
     messages: [
