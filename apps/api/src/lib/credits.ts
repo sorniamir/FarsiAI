@@ -27,9 +27,8 @@ function utcDay(): string {
 }
 
 function nextUtcReset(day: string): string {
-  return new Date(`${day}T00:00:00.000Z`).getTime() + 86_400_000 > 0
-    ? new Date(new Date(`${day}T00:00:00.000Z`).getTime() + 86_400_000).toISOString()
-    : new Date(Date.now() + 86_400_000).toISOString();
+  const start = new Date(`${day}T00:00:00.000Z`).getTime();
+  return new Date(start + 86_400_000).toISOString();
 }
 
 function fallbackState(actorKey: string): GuestFallbackState {
@@ -99,6 +98,44 @@ function parseQuota(payload: unknown): DailyQuota | null {
   };
 }
 
+function parseSpendPayload(payload: unknown): SpendResult {
+  if (!payload || typeof payload !== 'object') return { ok: false, reason: 'remote_error' };
+  const value = payload as Record<string, unknown>;
+  if (value.ok === false && value.reason === 'chat_limit') return { ok: false, reason: 'chat_limit' };
+  if (value.ok === false && value.reason === 'image_limit') return { ok: false, reason: 'image_limit' };
+  const quotaValue = 'quota' in value ? parseQuota(value.quota) : parseQuota(value);
+  return quotaValue ? { ok: true, quota: quotaValue } : { ok: false, reason: 'remote_error' };
+}
+
+async function callGuestDurableQuota(
+  env: Env,
+  actorKey: string,
+  path: '/spend' | '/refund',
+  body: Record<string, unknown>,
+): Promise<SpendResult | boolean | null> {
+  if (!env.GUEST_QUOTA) return null;
+
+  try {
+    const id = env.GUEST_QUOTA.idFromName(actorKey);
+    const stub = env.GUEST_QUOTA.get(id);
+    const response = await stub.fetch(`https://guest-quota.internal${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (path === '/refund') return response.ok;
+    return parseSpendPayload(payload);
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'guest_quota_durable_object_failed',
+      message: error instanceof Error ? error.message : 'unknown_durable_object_error',
+    }));
+    return null;
+  }
+}
+
 async function callQuotaRpc(
   env: Env,
   path: string,
@@ -142,6 +179,9 @@ export async function spendGuestDailyQuota(
   mode: 'chat' | 'image',
   referenceId: string,
 ): Promise<SpendResult> {
+  const durable = await callGuestDurableQuota(env, actorKey, '/spend', { mode, referenceId });
+  if (durable && typeof durable === 'object' && 'ok' in durable) return durable;
+
   if (!guestQuotaRemoteUnavailable) {
     const remote = await callQuotaRpc(env, 'rpc/use_guest_daily_quota', {
       p_actor_key: actorKey,
@@ -151,7 +191,7 @@ export async function spendGuestDailyQuota(
 
     if (remote.ok || remote.reason === 'chat_limit' || remote.reason === 'image_limit') return remote;
     guestQuotaRemoteUnavailable = true;
-    console.warn(JSON.stringify({ event: 'guest_quota_fallback_enabled', reason: remote.reason }));
+    console.warn(JSON.stringify({ event: 'guest_quota_memory_fallback_enabled', reason: remote.reason }));
   }
 
   return spendGuestFallbackQuota(actorKey, mode, referenceId);
@@ -191,6 +231,9 @@ export async function refundGuestDailyQuota(
   actorKey: string,
   referenceId: string,
 ): Promise<boolean> {
+  const durable = await callGuestDurableQuota(env, actorKey, '/refund', { referenceId });
+  if (typeof durable === 'boolean') return durable;
+
   if (!guestQuotaRemoteUnavailable) {
     const remote = await callRefundRpc(env, 'rpc/refund_guest_daily_quota', {
       p_actor_key: actorKey,
