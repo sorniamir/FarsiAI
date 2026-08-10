@@ -23,9 +23,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     env:
-      VITE_API_URL: ${{ vars.VITE_API_URL }}
-      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_API_URL: ${{ vars.VITE_API_URL || 'https://farsiai-api.sorniamir2005.workers.dev' }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://amjeqpkdowiqpnbdnlov.supabase.co' }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_dmq29e97vQpib77ne8wVWA_DHuzJ9-U' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +46,22 @@ jobs:
 
       - name: Build Windows installer
         run: npm run desktop:build
+
+      - name: Verify production client configuration
+        shell: pwsh
+        run: |
+          $assets = Get-ChildItem "apps/desktop/dist/assets/*.js"
+          $joined = ($assets | Get-Content -Raw) -join "`n"
+          if ($joined -notmatch [regex]::Escape($env:VITE_SUPABASE_URL)) {
+            throw "Supabase URL was not embedded into the desktop production bundle."
+          }
+          if ($joined -notmatch [regex]::Escape($env:VITE_SUPABASE_PUBLISHABLE_KEY)) {
+            throw "Supabase publishable key was not embedded into the desktop production bundle."
+          }
+          if ($joined -notmatch [regex]::Escape($env:VITE_API_URL)) {
+            throw "Production API URL was not embedded into the desktop production bundle."
+          }
+          Write-Host "Verified production API + Supabase client configuration in desktop bundle."
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
