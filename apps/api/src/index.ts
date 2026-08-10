@@ -1,5 +1,3 @@
-export { GuestQuotaDurableObject } from './guest-quota-object';
-
 import { handleAgentPlan } from './ai/agent';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
@@ -52,7 +50,7 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.1' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.2' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
