@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
+    "icon:materialize": "node scripts/materialize-icon.mjs",
+    "dev": "npm run icon:materialize && vite",
+    "build": "npm run icon:materialize && tsc -p tsconfig.json && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "icons": "tauri icon public/app-icon.png",
+    "icons": "npm run icon:materialize && tauri icon public/app-icon.png",
     "tauri:dev": "npm run icons && tauri dev",
     "tauri:build": "npm run icons && tauri build"
   },
