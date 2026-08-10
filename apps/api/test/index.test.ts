@@ -66,7 +66,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.1' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.6' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
