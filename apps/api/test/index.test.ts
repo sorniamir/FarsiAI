@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import worker from '../src/index';
+import { normalizeAssistantText } from '../src/ai/chat';
 import { spendDailyQuota } from '../src/lib/credits';
 import type { Env } from '../src/types';
 
@@ -40,7 +41,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.1' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.2' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -67,6 +68,34 @@ describe('FarsiAI Worker', () => {
     assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 1);
     assert.equal(env.AI.run.mock.callCount(), 1);
     assert.equal(env.AI.run.mock.calls[0].arguments[0], '@cf/qwen/qwen3-30b-a3b-fp8');
+  });
+
+  it('sends Persian directly to the chat model without translation', async () => {
+    const env = createEnv({
+      AI: { run: mock.fn(async () => ({ response: 'پاسخ مستقیم و روان فارسی.' })) },
+    });
+
+    const response = await worker.fetch(
+      aiRequest({
+        mode: 'chat',
+        message: 'چرا آسمان آبی است؟',
+        history: [{ role: 'assistant', content: 'قبلاً درباره نور صحبت کردیم.' }],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(env.AI.run.mock.callCount(), 1);
+    const [model, input] = env.AI.run.mock.calls[0].arguments as [string, { messages: Array<{ role: string; content: string }> }];
+    assert.equal(model, '@cf/qwen/qwen3-30b-a3b-fp8');
+    assert.equal(input.messages.at(-1)?.content, 'چرا آسمان آبی است؟');
+    assert.ok(input.messages.some((item) => item.content === 'قبلاً درباره نور صحبت کردیم.'));
+  });
+
+  it('removes hidden reasoning and raw Markdown from assistant text', () => {
+    const raw = '<think>internal reasoning</think>\n\n**پاسخ روشن**\n* مورد اول\nمتن _ساده_ و `دقیق`.';
+
+    assert.equal(normalizeAssistantText(raw), 'پاسخ روشن\n• مورد اول\nمتن ساده و دقیق.');
   });
 
   it('stops rate-limited requests before invoking Workers AI', async () => {
@@ -190,3 +219,4 @@ describe('Supabase admin authentication', () => {
     assert.deepEqual(result, { ok: false, reason: 'chat_limit' });
   });
 });
+
