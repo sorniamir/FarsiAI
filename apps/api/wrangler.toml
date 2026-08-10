@@ -14,9 +14,9 @@ enabled = true
 name = "GUEST_QUOTA"
 class_name = "GuestQuotaDurableObject"
 
-[[migrations]]
-tag = "guest-quota-v1"
-new_sqlite_classes = ["GuestQuotaDurableObject"]
+[exports.GuestQuotaDurableObject]
+type = "durable-object"
+storage = "sqlite"
 
 [[ratelimits]]
 name = "API_RATE_LIMITER"
