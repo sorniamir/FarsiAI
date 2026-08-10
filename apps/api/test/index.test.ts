@@ -41,7 +41,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.2' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.3' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -71,8 +71,15 @@ describe('FarsiAI Worker', () => {
   });
 
   it('sends Persian directly to the chat model without translation', async () => {
+    let call = 0;
     const env = createEnv({
-      AI: { run: mock.fn(async () => ({ response: 'پاسخ مستقیم و روان فارسی.' })) },
+      AI: {
+        run: mock.fn(async () => ({
+          response: call++ === 0
+            ? 'چشم‌ها ما به نور آبی حساس‌تر هستند.'
+            : 'چشم‌های ما به نور آبی حساس‌ترند.',
+        })),
+      },
     });
 
     const response = await worker.fetch(
@@ -85,11 +92,34 @@ describe('FarsiAI Worker', () => {
     );
 
     assert.equal(response.status, 200);
-    assert.equal(env.AI.run.mock.callCount(), 1);
+    assert.equal((await response.json() as { text: string }).text, 'چشم‌های ما به نور آبی حساس‌ترند.');
+    assert.equal(env.AI.run.mock.callCount(), 2);
     const [model, input] = env.AI.run.mock.calls[0].arguments as [string, { messages: Array<{ role: string; content: string }> }];
     assert.equal(model, '@cf/qwen/qwen3-30b-a3b-fp8');
     assert.equal(input.messages.at(-1)?.content, 'چرا آسمان آبی است؟');
     assert.ok(input.messages.some((item) => item.content === 'قبلاً درباره نور صحبت کردیم.'));
+
+    const [, reviewInput] = env.AI.run.mock.calls[1].arguments as [string, { messages: Array<{ role: string; content: string }> }];
+    assert.match(reviewInput.messages.at(-1)?.content ?? '', /چشم‌ها ما/);
+    assert.match(reviewInput.messages.at(-1)?.content ?? '', /چرا آسمان آبی است/);
+  });
+
+  it('returns the original Persian answer if the language review is unavailable', async () => {
+    let call = 0;
+    const env = createEnv({
+      AI: {
+        run: mock.fn(async () => {
+          if (call++ === 0) return { response: 'پاسخ فارسی اولیه.' };
+          throw new Error('review unavailable');
+        }),
+      },
+    });
+
+    const response = await worker.fetch(aiRequest({ mode: 'chat', message: 'یک پاسخ فارسی بده.' }), env);
+
+    assert.equal(response.status, 200);
+    assert.equal((await response.json() as { text: string }).text, 'پاسخ فارسی اولیه.');
+    assert.equal(env.AI.run.mock.callCount(), 2);
   });
 
   it('removes hidden reasoning and raw Markdown from assistant text', () => {
