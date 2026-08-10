@@ -38,22 +38,28 @@ function guestRequest(body: unknown): Request {
   });
 }
 
-describe('Desktop v0.4.2 regressions', () => {
+function installAuthenticatedUserFetch() {
+  globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) return Response.json({ id: 'user-1', email: 'user@example.com' });
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
+describe('Desktop v0.4.3 regressions', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     mock.restoreAll();
   });
 
   it('rejects a fake textual Codex completion until a real write_file tool call is returned', async () => {
-    globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/auth/v1/user')) return Response.json({ id: 'user-1', email: 'user@example.com' });
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
+    installAuthenticatedUserFetch();
 
     let call = 0;
     const aiRun = mock.fn(async (_model: string, input: any) => {
       assert.equal(input.tool_choice, 'required');
+      assert.equal(input.tools.length, 1);
+      assert.equal(input.tools[0].name, 'write_file');
       call += 1;
       if (call === 1) return { response: 'فایل ساخته شد.' };
       return {
@@ -87,6 +93,56 @@ describe('Desktop v0.4.2 regressions', () => {
     assert.equal(payload.type, 'tool');
     assert.equal(payload.tool.name, 'write_file');
     assert.equal(payload.tool.arguments.path, 'hello.txt');
+    assert.equal(aiRun.mock.callCount(), 2);
+  });
+
+  it('rejects the wrong tool for a create-file task and strips the virtual workspace prefix', async () => {
+    installAuthenticatedUserFetch();
+
+    let call = 0;
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      assert.equal(input.tool_choice, 'required');
+      assert.deepEqual(input.tools.map((tool: any) => tool.name), ['write_file']);
+      call += 1;
+      if (call === 1) {
+        return {
+          tool_calls: [
+            { name: 'list_directory', arguments: { path: '.' } },
+          ],
+        };
+      }
+      return {
+        tool_calls: [
+          {
+            name: 'write_file',
+            arguments: { path: 'approved-workspace/hello.txt', content: 'real-write' },
+          },
+        ],
+      };
+    });
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(
+      agentRequest({
+        task: 'فایل hello.txt بساز و داخلش real-write بنویس',
+        workspace: 'approved-workspace',
+        observations: [],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, true);
+    assert.equal(payload.type, 'tool');
+    assert.equal(payload.tool.name, 'write_file');
+    assert.equal(payload.tool.arguments.path, 'hello.txt');
+    assert.equal(payload.tool.arguments.content, 'real-write');
     assert.equal(aiRun.mock.callCount(), 2);
   });
 
