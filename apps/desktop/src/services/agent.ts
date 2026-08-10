@@ -1,3 +1,4 @@
+import { normalizeAgentRelativePath } from '../lib/agentPath';
 import { supabase } from '../lib/supabase';
 
 export type AgentObservation = {
@@ -18,6 +19,25 @@ export type AgentPlanResponse =
   | { ok: false; error: string };
 
 const API_URL = import.meta.env.VITE_API_URL?.trim() || 'http://127.0.0.1:8787';
+
+function normalizePlan(data: AgentPlanResponse): AgentPlanResponse {
+  if (!data.ok || data.type !== 'tool' || !('path' in data.tool.arguments)) return data;
+
+  try {
+    return {
+      ...data,
+      tool: {
+        ...data.tool,
+        arguments: {
+          ...data.tool.arguments,
+          path: normalizeAgentRelativePath(String(data.tool.arguments.path ?? '.')),
+        },
+      } as AgentToolCall,
+    };
+  } catch {
+    return { ok: false, error: 'Codex مسیر نامعتبر یا خارج از Workspace برگرداند.' };
+  }
+}
 
 export async function planAgentStep(input: {
   task: string;
@@ -49,7 +69,7 @@ export async function planAgentStep(input: {
     if (!response.ok && !('error' in data)) {
       return { ok: false, error: 'Codex planner در دسترس نیست.' };
     }
-    return data;
+    return normalizePlan(data);
   } catch {
     return { ok: false, error: 'پاسخ Codex planner معتبر نبود.' };
   }

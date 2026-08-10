@@ -2,7 +2,7 @@ use crate::AppState;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
@@ -25,22 +25,6 @@ fn canonical_existing(path: &str) -> Result<PathBuf, String> {
     fs::canonicalize(PathBuf::from(path)).map_err(|error| error.to_string())
 }
 
-fn canonical_for_write(path: &str) -> Result<PathBuf, String> {
-    let candidate = PathBuf::from(path);
-    if candidate.exists() {
-        return fs::canonicalize(candidate).map_err(|error| error.to_string());
-    }
-
-    let parent = candidate
-        .parent()
-        .ok_or_else(|| "File path must have a parent directory".to_string())?;
-    let parent = fs::canonicalize(parent).map_err(|error| error.to_string())?;
-    let file_name = candidate
-        .file_name()
-        .ok_or_else(|| "Invalid file name".to_string())?;
-    Ok(parent.join(file_name))
-}
-
 fn workspace_root_from_allowed(
     allowed: &HashSet<PathBuf>,
     target: &Path,
@@ -51,6 +35,46 @@ fn workspace_root_from_allowed(
         .max_by_key(|base| base.components().count())
         .cloned()
         .ok_or_else(|| "Access denied. Approve the workspace directory first.".to_string())
+}
+
+fn validate_relative_components(relative: &Path) -> Result<(), String> {
+    for component in relative.components() {
+        match component {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err("Access denied. Invalid path outside workspace.".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn canonical_for_write(path: &str, allowed: &HashSet<PathBuf>) -> Result<PathBuf, String> {
+    let candidate = PathBuf::from(path);
+    if candidate.exists() {
+        let canonical = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
+        workspace_root_from_allowed(allowed, &canonical)?;
+        return Ok(canonical);
+    }
+
+    let root = workspace_root_from_allowed(allowed, &candidate)?;
+    let relative = candidate
+        .strip_prefix(&root)
+        .map_err(|_| "Access denied. Invalid workspace path.".to_string())?;
+    validate_relative_components(relative)?;
+
+    let parent = candidate
+        .parent()
+        .ok_or_else(|| "File path must have a parent directory".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+
+    let canonical_parent = fs::canonicalize(parent).map_err(|error| error.to_string())?;
+    workspace_root_from_allowed(allowed, &canonical_parent)?;
+
+    let file_name = candidate
+        .file_name()
+        .ok_or_else(|| "Invalid file name".to_string())?;
+    Ok(canonical_parent.join(file_name))
 }
 
 fn workspace_root(state: &State<AppState>, target: &Path) -> Result<PathBuf, String> {
@@ -99,7 +123,7 @@ fn write_text_file_impl(
         return Err("Refusing to write a text file larger than 5 MB in this version.".to_string());
     }
 
-    let target = canonical_for_write(path)?;
+    let target = canonical_for_write(path, allowed)?;
     workspace_root_from_allowed(allowed, &target)?;
     let backup = create_backup_from_allowed(allowed, &target)?;
     fs::write(&target, content).map_err(|error| error.to_string())?;
@@ -255,6 +279,25 @@ mod tests {
             fs::read_to_string(&target).expect("read written file"),
             "سلام من FarsiAI هستم"
         );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn codex_local_write_creates_missing_parent_directories() {
+        let root = temporary_workspace("nested-write-smoke");
+        let target = root.join("src").join("generated").join("test.txt");
+        let mut allowed = HashSet::new();
+        allowed.insert(root.clone());
+
+        write_text_file_impl(
+            target.to_str().expect("utf8 path"),
+            "nested-content",
+            &allowed,
+        )
+        .expect("nested write must succeed");
+
+        assert!(target.is_file(), "write_file must create missing parent directories");
+        assert_eq!(fs::read_to_string(&target).expect("read nested file"), "nested-content");
         fs::remove_dir_all(root).expect("cleanup");
     }
 
