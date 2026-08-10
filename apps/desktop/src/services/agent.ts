@@ -1,7 +1,8 @@
 import { supabase } from '../lib/supabase';
 
 export type AgentObservation = {
-  role: 'tool' | 'note';
+  // Observations cross a JSON boundary; the Worker normalizes every value to tool/note before model use.
+  role: string;
   name?: string;
   content: string;
 };
