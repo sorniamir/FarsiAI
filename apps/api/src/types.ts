@@ -1,5 +1,25 @@
+export type AiMarkdownDocument = {
+  name: string;
+  blob: Blob;
+};
+
+export type AiMarkdownResult = {
+  id?: string;
+  name?: string;
+  format?: 'markdown' | 'text' | 'error';
+  mimetype?: string;
+  mimeType?: string;
+  tokens?: number;
+  data?: string;
+  error?: string;
+};
+
 export type AiBinding = {
   run(model: string, input: Record<string, unknown>): Promise<any>;
+  toMarkdown(
+    input: AiMarkdownDocument | AiMarkdownDocument[],
+    options?: Record<string, unknown>,
+  ): Promise<AiMarkdownResult | AiMarkdownResult[]>;
 };
 
 export type RateLimitBinding = {
@@ -25,6 +45,8 @@ export type Env = {
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  GEMINI_API_KEY?: string;
+  NANO_BANANA_MODEL?: string;
 };
 
 export type ConversationMessage = {
@@ -32,11 +54,21 @@ export type ConversationMessage = {
   content: string;
 };
 
+export type AiAttachment = {
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+  size?: number;
+};
+
 export type AiRequest = {
   mode: 'chat' | 'image';
   message: string;
   history?: ConversationMessage[];
   conversationId?: string;
+  attachments?: AiAttachment[];
+  imageAction?: 'generate' | 'edit';
   referenceImage?: string;
   referencePrompt?: string;
+  replyToMessageId?: string;
 };
