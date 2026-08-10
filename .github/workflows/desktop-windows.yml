@@ -2,7 +2,7 @@ name: Desktop Windows
 
 on:
   push:
-    branches: ["agent/desktop-*"]
+    branches: [main, "agent/desktop-*"]
     paths:
       - "apps/desktop/**"
       - "apps/api/src/ai/agent.ts"
@@ -22,6 +22,10 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
