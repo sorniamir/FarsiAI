@@ -130,16 +130,54 @@ function extractText(result: any): string {
   return sanitizeText(typeof value === 'string' ? value : JSON.stringify(value), 6000);
 }
 
+function successfulObservation(observation: AgentObservation, name: ToolCall['name']): boolean {
+  if (observation.role !== 'tool' || observation.name !== name) return false;
+  const content = observation.content.trim().toUpperCase();
+  return !content.startsWith('ERROR:') && !content.startsWith('USER_DENIED_');
+}
+
+function lastSuccessfulIndex(observations: AgentObservation[], name: ToolCall['name']): number {
+  for (let index = observations.length - 1; index >= 0; index -= 1) {
+    if (successfulObservation(observations[index], name)) return index;
+  }
+  return -1;
+}
+
+function taskRequirements(task: string, observations: AgentObservation[]) {
+  const normalized = task.toLowerCase();
+  const writeRequested = /(create|write|save|edit|modify|replace|update|make\s+(a\s+)?file|فایل.*(بساز|ایجاد|ذخیره|ویرایش|تغییر)|بساز|ایجاد کن|ذخیره کن|ویرایش کن|تغییر بده|به.?روزرسانی)/iu.test(normalized);
+  const commandRequested = /(\brun\b|\bbuild\b|\btest\b|\binstall\b|\bnpm\b|\bnpx\b|\bpnpm\b|\byarn\b|\bgit\b|\bpython\b|اجرا کن|بیلد|تست کن|نصب کن|کامپایل)/iu.test(normalized);
+  const verifyRequested = /(verify|confirm|read it back|check it|دوباره.*بخوان|تأیید کن|چک کن|بررسی.*فایل)/iu.test(normalized);
+  const denied = observations.some((item) => item.content.trim().toUpperCase().startsWith('USER_DENIED_'));
+  const writeIndex = lastSuccessfulIndex(observations, 'write_file');
+  const commandIndex = lastSuccessfulIndex(observations, 'run_command');
+  const readIndex = lastSuccessfulIndex(observations, 'read_file');
+
+  const missing: string[] = [];
+  if (writeRequested && writeIndex < 0) missing.push('write_file must successfully create or modify the requested file');
+  if (commandRequested && commandIndex < 0) missing.push('run_command must successfully execute the requested command');
+  if (verifyRequested && writeIndex >= 0 && readIndex <= writeIndex) missing.push('read_file must verify the written file after write_file');
+
+  const requireTool = !denied && (observations.length === 0 || missing.length > 0);
+  return { requireTool, missing };
+}
+
 async function runPlannerWithFallback(
   env: Env,
   input: Record<string, unknown>,
   requestId: string,
+  requireTool: boolean,
 ): Promise<PlannerResult> {
   let lastError: unknown;
 
   for (const model of AGENT_MODELS) {
     try {
       const result = await env.AI.run(model, input as any);
+      if (requireTool && !extractToolCall(result)) {
+        lastError = new Error('Model returned text while a real tool call was required.');
+        console.warn(JSON.stringify({ event: 'codex_required_tool_missing', requestId, model }));
+        continue;
+      }
       console.log(JSON.stringify({ event: 'codex_model_success', requestId, model }));
       return { result, model };
     } catch (error) {
@@ -189,18 +227,21 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
         })
       : [];
 
+    const requirements = taskRequirements(task, observations);
     const system = [
       'You are FarsiAI Codex, a careful coding and computer-work agent.',
       'Plan exactly one next step at a time and call exactly one available tool when a tool is needed.',
       'The desktop app executes tools locally and sends observations back to you. Never claim a local action succeeded until a tool observation confirms it.',
       'All file paths must be relative to the approved workspace. Never use absolute paths, parent traversal, home folders, secrets, credentials, or paths outside the workspace.',
-      'Inspect before modifying. Prefer list_directory and read_file before write_file.',
-      'When the user asks to create or change a file, perform the needed read/write tool calls rather than only explaining how to do it.',
-      'When the user asks to run, test, install, build, inspect git, or execute a development command, use run_command with the supported executable.',
+      'Inspect before modifying. Prefer list_directory and read_file before write_file when inspection is useful.',
+      'When the user asks to create or change a file, you MUST use write_file. A textual answer is not completion.',
+      'When the user asks to run, test, install, build, inspect git, or execute a development command, you MUST use run_command.',
+      'If the request asks you to verify a file after writing it, use read_file after the successful write_file observation.',
       'Use run_command only for the provided development commands and never request shell wrappers such as cmd, powershell, bash, sh, curl or wget.',
       'Do not delete files, reset git history, force push, change credentials, publish, deploy, purchase, or perform external side effects.',
       'After a write or command, inspect its returned result and continue until the requested task is genuinely complete or a user approval is denied.',
-      'When complete, do not call a tool. Return a concise Persian final response describing exactly what was completed and any remaining user action.',
+      'Only return a final answer when every required real-world action is confirmed by tool observations.',
+      'When complete, return a concise Persian final response describing exactly what was completed and any remaining user action.',
     ].join('\n');
 
     const plannerInput = {
@@ -208,19 +249,33 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
         { role: 'system', content: system },
         {
           role: 'user',
-          content: JSON.stringify({ task, workspace, observations }),
+          content: JSON.stringify({
+            task,
+            workspace,
+            observations,
+            requiredActionsStillMissing: requirements.missing,
+          }),
         },
       ],
       tools,
-      tool_choice: 'auto',
+      tool_choice: requirements.requireTool ? 'required' : 'auto',
       parallel_tool_calls: false,
       temperature: 0.1,
       max_completion_tokens: 1800,
     };
 
-    const { result, model } = await runPlannerWithFallback(env, plannerInput, requestId);
+    const { result, model } = await runPlannerWithFallback(
+      env,
+      plannerInput,
+      requestId,
+      requirements.requireTool,
+    );
     const tool = extractToolCall(result);
     if (tool) return json(env, { ok: true, type: 'tool', tool, model });
+
+    if (requirements.missing.length > 0) {
+      return json(env, { ok: false, error: 'Codex هنوز عمل واقعی موردنیاز را اجرا نکرده است.' }, 503);
+    }
 
     const message = extractText(result) || 'کار تمام شد.';
     return json(env, { ok: true, type: 'final', message, model });
