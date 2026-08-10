@@ -46,7 +46,7 @@ function installAuthenticatedUserFetch() {
   });
 }
 
-describe('Desktop v0.4.3 regressions', () => {
+describe('Desktop v0.4.4 regressions', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     mock.restoreAll();
@@ -144,6 +144,149 @@ describe('Desktop v0.4.3 regressions', () => {
     assert.equal(payload.tool.arguments.path, 'hello.txt');
     assert.equal(payload.tool.arguments.content, 'real-write');
     assert.equal(aiRun.mock.callCount(), 2);
+  });
+
+  it('accepts Cloudflare wrapped result.tool_calls responses in production shape', async () => {
+    installAuthenticatedUserFetch();
+
+    const aiRun = mock.fn(async () => ({
+      result: {
+        tool_calls: [
+          {
+            name: 'write_file',
+            arguments: { path: 'approved-workspace/config.txt', content: 'wrapped-result' },
+          },
+        ],
+      },
+    }));
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(
+      agentRequest({
+        task: 'فایل موجود config.txt را ویرایش کن و مقدار wrapped-result را ذخیره کن',
+        workspace: 'approved-workspace',
+        observations: [{ role: 'note', content: 'فایل باید تغییر کند.' }],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, true);
+    assert.equal(payload.type, 'tool');
+    assert.equal(payload.tool.name, 'write_file');
+    assert.equal(payload.tool.arguments.path, 'config.txt');
+    assert.equal(payload.tool.arguments.content, 'wrapped-result');
+    assert.equal(aiRun.mock.callCount(), 1);
+  });
+
+  it('uses the third coding model when the first two planner models fail', async () => {
+    installAuthenticatedUserFetch();
+
+    let call = 0;
+    const aiRun = mock.fn(async () => {
+      call += 1;
+      if (call <= 2) throw new Error('temporary model outage');
+      return {
+        tool_calls: [
+          {
+            name: 'run_command',
+            arguments: { command: 'npm', args: ['run', 'test'] },
+          },
+        ],
+      };
+    });
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(
+      agentRequest({
+        task: 'npm run test را اجرا کن',
+        workspace: 'approved-workspace',
+        observations: [],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, true);
+    assert.equal(payload.type, 'tool');
+    assert.equal(payload.tool.name, 'run_command');
+    assert.equal(payload.model, '@cf/zai-org/glm-5.2');
+    assert.equal(aiRun.mock.callCount(), 3);
+  });
+
+  it('falls back to a safe deterministic write plan when every planner inference fails', async () => {
+    installAuthenticatedUserFetch();
+
+    const aiRun = mock.fn(async () => {
+      throw new Error('all planner models unavailable');
+    });
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(
+      agentRequest({
+        task: 'یک فایل test.txt بساز و داخلش بنویس FarsiAI Codex Test',
+        workspace: 'approved-workspace',
+        observations: [],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, true);
+    assert.equal(payload.type, 'tool');
+    assert.equal(payload.model, 'deterministic-write-fallback');
+    assert.equal(payload.tool.name, 'write_file');
+    assert.equal(payload.tool.arguments.path, 'test.txt');
+    assert.equal(payload.tool.arguments.content, 'FarsiAI Codex Test');
+    assert.equal(aiRun.mock.callCount(), 6);
+  });
+
+  it('finishes a tracked local action from the confirmed tool observation without another model call', async () => {
+    installAuthenticatedUserFetch();
+
+    const aiRun = mock.fn(async () => {
+      throw new Error('must not call model after confirmed write');
+    });
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(
+      agentRequest({
+        task: 'یک فایل test.txt بساز و داخلش بنویس FarsiAI Codex Test',
+        workspace: 'approved-workspace',
+        observations: [{ role: 'tool', name: 'write_file', content: 'WRITE_OK_NEW_FILE_VERIFIED' }],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, true);
+    assert.equal(payload.type, 'final');
+    assert.equal(payload.model, 'local-confirmation');
+    assert.equal(aiRun.mock.callCount(), 0);
   });
 
   it('keeps Guest Chat available when the production guest quota RPC is missing', async () => {

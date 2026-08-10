@@ -24,6 +24,7 @@ type PlannerResult = {
 const AGENT_MODELS = [
   '@cf/moonshotai/kimi-k2.7-code',
   '@cf/zai-org/glm-4.7-flash',
+  '@cf/zai-org/glm-5.2',
 ] as const;
 
 const TOOL_NAMES = new Set<ToolName>(['list_directory', 'read_file', 'write_file', 'run_command']);
@@ -134,15 +135,26 @@ function normalizeToolCall(raw: unknown): ToolCall | null {
   return { name: nameValue as ToolName, arguments: args };
 }
 
+function modelResultCandidates(result: any): any[] {
+  return [result, result?.result, result?.data, result?.result?.result].filter(Boolean);
+}
+
 function extractToolCall(result: any): ToolCall | null {
-  const direct = Array.isArray(result?.tool_calls) ? result.tool_calls[0] : undefined;
-  const nested = result?.choices?.[0]?.message?.tool_calls?.[0];
-  return normalizeToolCall(direct ?? nested);
+  for (const candidate of modelResultCandidates(result)) {
+    const direct = Array.isArray(candidate?.tool_calls) ? candidate.tool_calls[0] : undefined;
+    const nested = candidate?.choices?.[0]?.message?.tool_calls?.[0];
+    const normalized = normalizeToolCall(direct ?? nested);
+    if (normalized) return normalized;
+  }
+  return null;
 }
 
 function extractText(result: any): string {
-  const value = result?.response ?? result?.choices?.[0]?.message?.content ?? '';
-  return sanitizeText(typeof value === 'string' ? value : JSON.stringify(value), 6000);
+  for (const candidate of modelResultCandidates(result)) {
+    const value = candidate?.response ?? candidate?.choices?.[0]?.message?.content;
+    if (typeof value === 'string' && value.trim()) return sanitizeText(value, 6000);
+  }
+  return '';
 }
 
 function successfulObservation(observation: AgentObservation, name: ToolName): boolean {
@@ -162,7 +174,7 @@ function taskRequirements(task: string, observations: AgentObservation[]) {
   const normalized = task.toLowerCase();
   const createRequested = /(create|make\s+(a\s+)?file|new\s+file|فایل.*(بساز|ایجاد)|بساز|ایجاد کن)/iu.test(normalized);
   const writeRequested = /(create|write|save|edit|modify|replace|update|make\s+(a\s+)?file|فایل.*(بساز|ایجاد|ذخیره|ویرایش|تغییر)|بساز|ایجاد کن|ذخیره کن|ویرایش کن|تغییر بده|به.?روزرسانی)/iu.test(normalized);
-  const commandRequested = /(\brun\b|\bbuild\b|\btest\b|\binstall\b|\bnpm\b|\bnpx\b|\bpnpm\b|\byarn\b|\bgit\b|\bpython\b|اجرا کن|بیلد|تست کن|نصب کن|کامپایل)/iu.test(normalized);
+  const commandRequested = /(?:\brun\s+(?:the\s+)?(?:tests?|build|command)\b|\b(?:npm|npx|node|pnpm|yarn|git|python|python3)\b|\b(?:build|test|install|compile)\s+(?:it|this|the|project|app|code|tests?)\b|اجرا\s*کن|بیلد\s*کن|تست\s*کن|نصب\s*کن|کامپایل\s*کن)/iu.test(normalized);
   const verifyRequested = /(verify|confirm|read it back|check it|دوباره.*بخوان|تأیید کن|چک کن|بررسی.*فایل)/iu.test(normalized);
   const denied = observations.some((item) => item.content.trim().toUpperCase().startsWith('USER_DENIED_'));
   const writeIndex = lastSuccessfulIndex(observations, 'write_file');
@@ -186,7 +198,48 @@ function taskRequirements(task: string, observations: AgentObservation[]) {
   }
 
   const requireTool = !denied && (observations.length === 0 || missing.length > 0);
-  return { requireTool, requiredTool, missing };
+  const hasTrackedActions = writeRequested || commandRequested || verifyRequested;
+  return { requireTool, requiredTool, missing, hasTrackedActions };
+}
+
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'") || (first === '`' && last === '`') || (first === '“' && last === '”')) {
+      return trimmed.slice(1, -1).trim();
+    }
+  }
+  return trimmed;
+}
+
+function deterministicWriteFallback(task: string, requiredTool?: ToolName): ToolCall | null {
+  if (requiredTool !== 'write_file') return null;
+
+  const fileMatch = task.match(/(?:فایل|file)\s+(?:(?:به\s*نام|بنام|named|called)\s+)?["'`“]?([^\s"'`”]+\.[a-zA-Z0-9]{1,12})["'`”]?/iu)
+    ?? task.match(/(?:به\s*نام|بنام|named|called)\s+["'`“]?([^\s"'`”]+\.[a-zA-Z0-9]{1,12})["'`”]?/iu);
+  if (!fileMatch?.[1]) return null;
+
+  const contentMatch = task.match(/(?:داخل(?:ش|\s+آن)?\s*(?:بنویس|بذار|بزار|قرار\s+بده)|محتوا(?:ی|یش)?\s*(?:باشد|باشه|:)?|with\s+(?:the\s+)?content|containing|write\s+(?:in\s+it\s+)?)\s*[:：]?\s*([\s\S]+)$/iu);
+  if (!contentMatch?.[1]) return null;
+
+  const path = normalizeRelativePath(fileMatch[1]);
+  const content = stripWrappingQuotes(cleanCodeContent(contentMatch[1]));
+  if (!path || path === '.' || !content) return null;
+
+  return { name: 'write_file', arguments: { path, content } };
+}
+
+function compatiblePlannerInput(input: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...input };
+  delete next.tool_choice;
+  delete next.parallel_tool_calls;
+  if (typeof next.max_completion_tokens === 'number') {
+    next.max_tokens = next.max_completion_tokens;
+    delete next.max_completion_tokens;
+  }
+  return next;
 }
 
 async function runPlannerWithFallback(
@@ -198,32 +251,42 @@ async function runPlannerWithFallback(
 ): Promise<PlannerResult> {
   let lastError: unknown;
 
-  for (const model of AGENT_MODELS) {
-    try {
-      const result = await env.AI.run(model, input as any);
-      const tool = extractToolCall(result);
-      if (requireTool && !tool) {
-        lastError = new Error('Model returned text while a real tool call was required.');
-        console.warn(JSON.stringify({ event: 'codex_required_tool_missing', requestId, model }));
-        continue;
+  const tryModels = async (plannerInput: Record<string, unknown>, compatibilityMode: boolean): Promise<PlannerResult | null> => {
+    for (const model of AGENT_MODELS) {
+      try {
+        const result = await env.AI.run(model, plannerInput as any);
+        const tool = extractToolCall(result);
+        if (requireTool && !tool) {
+          lastError = new Error('Model returned text while a real tool call was required.');
+          console.warn(JSON.stringify({ event: 'codex_required_tool_missing', requestId, model, compatibilityMode }));
+          continue;
+        }
+        if (requiredTool && tool?.name !== requiredTool) {
+          lastError = new Error(`Model returned ${tool?.name ?? 'no tool'} while ${requiredTool} was required.`);
+          console.warn(JSON.stringify({ event: 'codex_wrong_tool', requestId, model, requiredTool, received: tool?.name ?? null, compatibilityMode }));
+          continue;
+        }
+        console.log(JSON.stringify({ event: 'codex_model_success', requestId, model, tool: tool?.name ?? null, compatibilityMode }));
+        return { result, model };
+      } catch (error) {
+        lastError = error;
+        console.warn(JSON.stringify({
+          event: 'codex_model_failed',
+          requestId,
+          model,
+          compatibilityMode,
+          message: error instanceof Error ? error.message : 'unknown_model_error',
+        }));
       }
-      if (requiredTool && tool?.name !== requiredTool) {
-        lastError = new Error(`Model returned ${tool?.name ?? 'no tool'} while ${requiredTool} was required.`);
-        console.warn(JSON.stringify({ event: 'codex_wrong_tool', requestId, model, requiredTool, received: tool?.name ?? null }));
-        continue;
-      }
-      console.log(JSON.stringify({ event: 'codex_model_success', requestId, model, tool: tool?.name ?? null }));
-      return { result, model };
-    } catch (error) {
-      lastError = error;
-      console.warn(JSON.stringify({
-        event: 'codex_model_failed',
-        requestId,
-        model,
-        message: error instanceof Error ? error.message : 'unknown_model_error',
-      }));
     }
-  }
+    return null;
+  };
+
+  const primary = await tryModels(input, false);
+  if (primary) return primary;
+
+  const compatibility = await tryModels(compatiblePlannerInput(input), true);
+  if (compatibility) return compatibility;
 
   throw lastError instanceof Error ? lastError : new Error('No Codex planner model was available.');
 }
@@ -262,6 +325,16 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
       : [];
 
     const requirements = taskRequirements(task, observations);
+
+    if (requirements.hasTrackedActions && observations.length > 0 && requirements.missing.length === 0) {
+      return json(env, {
+        ok: true,
+        type: 'final',
+        message: 'عملیات درخواست‌شده با موفقیت روی Workspace تأییدشده اجرا و تأیید شد.',
+        model: 'local-confirmation',
+      });
+    }
+
     const system = [
       'You are FarsiAI Codex, a careful coding and computer-work agent.',
       'Plan exactly one next step at a time and call exactly one available tool when a tool is needed.',
@@ -304,17 +377,33 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
       max_completion_tokens: 1800,
     };
 
-    const { result, model } = await runPlannerWithFallback(
-      env,
-      plannerInput,
-      requestId,
-      requirements.requireTool,
-      requirements.requiredTool,
-    );
+    let planner: PlannerResult;
+    try {
+      planner = await runPlannerWithFallback(
+        env,
+        plannerInput,
+        requestId,
+        requirements.requireTool,
+        requirements.requiredTool,
+      );
+    } catch (plannerError) {
+      const deterministic = deterministicWriteFallback(task, requirements.requiredTool);
+      if (deterministic) {
+        console.warn(JSON.stringify({ event: 'codex_deterministic_write_fallback', requestId, path: deterministic.arguments.path }));
+        return json(env, { ok: true, type: 'tool', tool: deterministic, model: 'deterministic-write-fallback' });
+      }
+      throw plannerError;
+    }
+
+    const { result, model } = planner;
     const tool = extractToolCall(result);
     if (tool) return json(env, { ok: true, type: 'tool', tool, model });
 
     if (requirements.missing.length > 0) {
+      const deterministic = deterministicWriteFallback(task, requirements.requiredTool);
+      if (deterministic) {
+        return json(env, { ok: true, type: 'tool', tool: deterministic, model: 'deterministic-write-fallback' });
+      }
       return json(env, { ok: false, error: 'Codex هنوز عمل واقعی موردنیاز را اجرا نکرده است.' }, 503);
     }
 
@@ -329,7 +418,12 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
 
     return json(
       env,
-      { ok: false, error: 'Codex planner موقتاً در دسترس نیست. چند لحظه بعد دوباره تلاش کنید.' },
+      {
+        ok: false,
+        error: 'Codex planner موقتاً در دسترس نیست. چند لحظه بعد دوباره تلاش کنید.',
+        code: 'CODEX_PLANNER_UNAVAILABLE',
+        requestId,
+      },
       503,
     );
   }
