@@ -36,7 +36,11 @@ export async function planAgentStep(input: {
   const response = await fetch(`${API_URL}/v1/agent/plan`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      task: input.task,
+      workspace: 'approved-workspace',
+      observations: input.observations,
+    }),
   });
 
   try {
