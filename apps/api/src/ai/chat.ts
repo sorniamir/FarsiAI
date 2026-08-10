@@ -2,6 +2,7 @@ import type { ConversationMessage, Env } from '../types';
 import { containsPersian } from '../lib/language';
 
 const CHAT_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
+const REVIEW_MODEL = '@cf/openai/gpt-oss-120b';
 
 const SYSTEM_PROMPT = `You are FarsiAI, a production-quality AI assistant for Persian-speaking users.
 
@@ -65,13 +66,14 @@ export function normalizeAssistantText(value: string): string {
     .replace(/[يى]/g, 'ی')
     .replace(/ك/g, 'ک')
     .replace(/[ \t]+([،؛؟!,.])/g, '$1')
+    .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
 async function reviewPersianAnswer(env: Env, userText: string, draft: string): Promise<string> {
   try {
-    const result = await env.AI.run(CHAT_MODEL, {
+    const result = await env.AI.run(REVIEW_MODEL, {
       messages: [
         { role: 'system', content: PERSIAN_REVIEW_PROMPT },
         {
