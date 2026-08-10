@@ -41,7 +41,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.4' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.0' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -250,4 +250,3 @@ describe('Supabase admin authentication', () => {
     assert.deepEqual(result, { ok: false, reason: 'chat_limit' });
   });
 });
-
