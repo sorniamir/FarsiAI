@@ -30,6 +30,7 @@ type CachedMessages = {
 const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const messageCache = new Map<string, CachedMessages>();
 const inFlightMessages = new Map<string, Promise<StoredMessage[]>>();
+const conversationVersions = new Map<string, string>();
 
 function isFresh(entry: CachedMessages | undefined): entry is CachedMessages {
   return !!entry && Date.now() - entry.cachedAt < MESSAGE_CACHE_TTL_MS;
@@ -83,6 +84,7 @@ export function invalidateConversationMessages(conversationId?: string): void {
 export function clearConversationMessageCache(): void {
   messageCache.clear();
   inFlightMessages.clear();
+  conversationVersions.clear();
 }
 
 export async function getAccountSnapshot(): Promise<AccountSnapshot> {
@@ -134,6 +136,14 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     mode: (row.mode ?? 'chat') as ConversationSummary['mode'],
     updatedAt: String(row.updated_at),
   }));
+
+  for (const conversation of conversations) {
+    const previousVersion = conversationVersions.get(conversation.id);
+    if (previousVersion && previousVersion !== conversation.updatedAt) {
+      messageCache.delete(conversation.id);
+    }
+    conversationVersions.set(conversation.id, conversation.updatedAt);
+  }
 
   // Warm recent conversations without blocking the History list itself.
   void prefetchRecentConversations(conversations);
