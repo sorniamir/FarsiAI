@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useDesktopAgent } from './hooks/useDesktopAgent';
 import { planAgentStep, type AgentObservation, type AgentToolCall } from './services/agent';
 import { sendAiRequest, type AiMode, type DailyQuota } from './services/api';
@@ -13,6 +14,7 @@ import {
 } from './services/data';
 
 type Tab = 'chat' | 'codex' | 'computer';
+
 type UiMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -52,6 +54,10 @@ function truncate(value: string, max = 18000): string {
   return value.length > max ? `${value.slice(0, max)}\n…[truncated]` : value;
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 export default function App() {
   const agent = useDesktopAgent();
   const [authReady, setAuthReady] = useState(false);
@@ -66,7 +72,7 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [quota, setQuota] = useState<DailyQuota | undefined>();
 
-  const [workspace, setWorkspace] = useState('C:/Projects');
+  const [workspace, setWorkspace] = useState('');
   const [workspaceGranted, setWorkspaceGranted] = useState(false);
   const [selectedFile, setSelectedFile] = useState('');
   const [editorValue, setEditorValue] = useState('');
@@ -77,6 +83,7 @@ export default function App() {
   const [agentTimeline, setAgentTimeline] = useState<string[]>([]);
   const [approval, setApproval] = useState<ApprovalState | null>(null);
   const approvalResolver = useRef<((approved: boolean) => void) | null>(null);
+  const agentAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -90,6 +97,7 @@ export default function App() {
     });
     return () => {
       mounted = false;
+      agentAbortRef.current?.abort();
       unsubscribe();
     };
   }, []);
@@ -102,7 +110,7 @@ export default function App() {
       setConversationId(undefined);
       return;
     }
-    refreshCloudState();
+    void refreshCloudState();
   }, [user]);
 
   async function refreshCloudState() {
@@ -162,6 +170,7 @@ export default function App() {
       const assistant: UiMessage = result.mode === 'image'
         ? { id: `${Date.now()}-i`, role: 'assistant', image: result.image, text: 'تصویر آماده شد.' }
         : { id: `${Date.now()}-a`, role: 'assistant', text: result.text };
+
       setMessages((current) => [...current, assistant]);
       await refreshCloudState();
     } catch {
@@ -194,15 +203,43 @@ export default function App() {
     setTab('chat');
   }
 
-  async function approveWorkspace() {
-    if (!workspace.trim()) return;
+  async function grantWorkspace(path: string) {
+    const normalized = path.trim();
+    if (!normalized) return;
+
     try {
-      await agent.grantDirectory(workspace.trim());
+      await agent.grantDirectory(normalized);
+      setWorkspace(normalized);
       setWorkspaceGranted(true);
-      setAgentTimeline((current) => [`✓ Workspace approved: ${workspace}`, ...current]);
+      setSelectedFile('');
+      setEditorValue('');
+      setAgentTimeline((current) => ['✓ Workspace approved', ...current]);
     } catch (error) {
+      setWorkspaceGranted(false);
       setAgentTimeline((current) => [`✕ ${String(error)}`, ...current]);
     }
+  }
+
+  async function browseWorkspace() {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'انتخاب Workspace برای FarsiAI',
+      });
+
+      if (!selected) return;
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      if (typeof path === 'string' && path.trim()) {
+        await grantWorkspace(path);
+      }
+    } catch (error) {
+      setAgentTimeline((current) => [`✕ Folder picker: ${String(error)}`, ...current]);
+    }
+  }
+
+  async function approveWorkspace() {
+    await grantWorkspace(workspace);
   }
 
   async function openFile(path: string) {
@@ -217,13 +254,23 @@ export default function App() {
 
   async function saveSelectedFile() {
     if (!selectedFile) return;
+
     const approved = await requestApproval({
       title: 'اجازه ذخیره فایل',
-      detail: `FarsiAI می‌خواهد این فایل را تغییر دهد:\n${selectedFile}`,
+      detail: `FarsiAI می‌خواهد این فایل را تغییر دهد:\n${selectedFile}\n\nقبل از تغییر، Backup خودکار ساخته می‌شود.`,
       confirmLabel: 'ذخیره فایل',
     });
     if (!approved) return;
-    await agent.writeFile(selectedFile, editorValue);
+
+    try {
+      const backup = await agent.writeFile(selectedFile, editorValue);
+      setAgentTimeline((current) => [
+        backup ? '✓ Saved · backup created' : '✓ Saved new file',
+        ...current,
+      ]);
+    } catch (error) {
+      setAgentTimeline((current) => [`✕ ${String(error)}`, ...current]);
+    }
   }
 
   async function runManualCommand() {
@@ -231,6 +278,7 @@ export default function App() {
       setAgentTimeline((current) => ['ابتدا Workspace را approve کن.', ...current]);
       return;
     }
+
     const args = commandArgs.trim().split(/\s+/).filter(Boolean);
     const approved = await requestApproval({
       title: 'اجازه اجرای Terminal',
@@ -238,6 +286,7 @@ export default function App() {
       confirmLabel: 'اجرا',
     });
     if (!approved) return;
+
     try {
       await agent.runCommand(command.trim(), args, workspace);
     } catch (error) {
@@ -264,14 +313,15 @@ export default function App() {
       const path = toolPath(workspace, tool.arguments.path);
       const approved = await requestApproval({
         title: 'Codex می‌خواهد فایل را تغییر دهد',
-        detail: `${tool.arguments.path}\n\nاین تغییر فقط داخل Workspace تأییدشده انجام می‌شود.`,
+        detail: `${tool.arguments.path}\n\nقبل از Write از نسخه فعلی Backup گرفته می‌شود و تغییر فقط داخل Workspace مجاز انجام می‌شود.`,
         confirmLabel: 'اعمال تغییر',
       });
       if (!approved) return 'USER_DENIED_WRITE';
-      await agent.writeFile(path, tool.arguments.content);
+
+      const backup = await agent.writeFile(path, tool.arguments.content);
       setSelectedFile(path);
       setEditorValue(tool.arguments.content);
-      return 'WRITE_OK';
+      return backup ? 'WRITE_OK_BACKUP_CREATED' : 'WRITE_OK_NEW_FILE';
     }
 
     const args = Array.isArray(tool.arguments.args) ? tool.arguments.args : [];
@@ -281,30 +331,58 @@ export default function App() {
       confirmLabel: 'اجرا',
     });
     if (!approved) return 'USER_DENIED_COMMAND';
+
     const result = await agent.runCommand(tool.arguments.command, args, workspace);
     return truncate(`exit=${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+
+  function stopAgent() {
+    if (!agentRunning) return;
+    agentAbortRef.current?.abort();
+    setAgentTimeline((current) => [...current, '■ توقف توسط کاربر درخواست شد.']);
+    if (approval) resolveApproval(false);
   }
 
   async function runAgent() {
     const task = agentTask.trim();
     if (!task || agentRunning) return;
+
     if (!workspaceGranted) {
       setAgentTimeline((current) => ['ابتدا Workspace را approve کن.', ...current]);
       return;
     }
 
+    const controller = new AbortController();
+    agentAbortRef.current = controller;
     setAgentRunning(true);
-    setAgentTimeline([`● Task: ${task}`]);
+    setAgentTimeline([`● Task: ${task}`, '✓ Permission boundary active']);
     let observations: AgentObservation[] = [];
 
     try {
       for (let step = 1; step <= 12; step += 1) {
+        if (controller.signal.aborted) {
+          setAgentTimeline((current) => [...current, '■ Agent متوقف شد.']);
+          break;
+        }
+
         setAgentTimeline((current) => [...current, `○ Planning step ${step}…`]);
-        const plan = await planAgentStep({ task, workspace, observations });
+        const plan = await planAgentStep({
+          task,
+          workspace,
+          observations,
+          signal: controller.signal,
+        });
+
+        if (controller.signal.aborted) {
+          setAgentTimeline((current) => [...current, '■ Agent متوقف شد.']);
+          break;
+        }
+
         if (!plan.ok) {
           setAgentTimeline((current) => [...current, `✕ ${plan.error}`]);
           break;
         }
+
         if (plan.type === 'final') {
           setAgentTimeline((current) => [...current, `✓ ${plan.message}`]);
           break;
@@ -312,17 +390,31 @@ export default function App() {
 
         const tool = plan.tool;
         setAgentTimeline((current) => [...current, `→ ${tool.name}`]);
+
         try {
           const result = await executeAgentTool(tool);
           observations = [
             ...observations,
             { role: 'tool', name: tool.name, content: result },
           ].slice(-18);
-          setAgentTimeline((current) => [...current, `✓ ${tool.name} completed`]);
+
+          setAgentTimeline((current) => [
+            ...current,
+            result.includes('BACKUP') ? `✓ ${tool.name} completed · backup protected` : `✓ ${tool.name} completed`,
+          ]);
+
           if (result.startsWith('USER_DENIED_')) {
-            observations.push({ role: 'note', content: 'The user denied the requested side effect. Choose a safer alternative or stop.' });
+            observations.push({
+              role: 'note',
+              content: 'The user denied the requested side effect. Choose a safer alternative or stop.',
+            });
           }
         } catch (error) {
+          if (controller.signal.aborted || isAbortError(error)) {
+            setAgentTimeline((current) => [...current, '■ Agent متوقف شد.']);
+            break;
+          }
+
           const message = String(error);
           observations = [
             ...observations,
@@ -331,14 +423,26 @@ export default function App() {
           setAgentTimeline((current) => [...current, `✕ ${message}`]);
         }
       }
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) {
+        setAgentTimeline((current) => [...current, '■ Agent متوقف شد.']);
+      } else {
+        setAgentTimeline((current) => [...current, `✕ ${String(error)}`]);
+      }
     } finally {
+      if (agentAbortRef.current === controller) agentAbortRef.current = null;
       setAgentRunning(false);
       await refreshCloudState();
     }
   }
 
   if (!authReady) {
-    return <div className="center-screen"><div className="loader-orb" /><div>در حال آماده‌سازی FarsiAI…</div></div>;
+    return (
+      <div className="center-screen">
+        <div className="loader-orb" />
+        <div>در حال آماده‌سازی FarsiAI…</div>
+      </div>
+    );
   }
 
   if (!user) {
@@ -367,7 +471,11 @@ export default function App() {
         <div className="history-head"><span>تاریخچه مشترک</span><span>{conversations.length}</span></div>
         <div className="history-list">
           {conversations.map((item) => (
-            <button key={item.id} className={item.id === conversationId ? 'history-item active' : 'history-item'} onClick={() => openConversation(item)}>
+            <button
+              key={item.id}
+              className={item.id === conversationId ? 'history-item active' : 'history-item'}
+              onClick={() => openConversation(item)}
+            >
               <span className="history-title">{item.title}</span>
               <span className="history-meta">{formatDate(item.updatedAt)} · {item.mode}</span>
             </button>
@@ -392,6 +500,7 @@ export default function App() {
           </div>
           <div className="top-actions">
             {quota ? <span className="quota-pill">Chat {quota.chatRemaining} · Image {quota.imageRemaining}</span> : null}
+            {agentRunning ? <span className="quota-pill">Agent working</span> : null}
             <span className="status-pill"><i /> Online</span>
           </div>
         </header>
@@ -428,10 +537,16 @@ export default function App() {
               </div>
 
               <div className="composer">
-                <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode === 'image' ? 'تصویر موردنظرت را توصیف کن…' : 'هر چیزی می‌خواهی بپرس…'} />
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder={mode === 'image' ? 'تصویر موردنظرت را توصیف کن…' : 'هر چیزی می‌خواهی بپرس…'}
+                />
                 <div className="composer-footer">
                   <span>{mode === 'image' ? 'Image mode' : 'FarsiAI Chat'}</span>
-                  <button className="primary" disabled={!input.trim() || sending} onClick={() => submitChat()}>{sending ? '…' : 'ارسال ↑'}</button>
+                  <button className="primary" disabled={!input.trim() || sending} onClick={() => submitChat()}>
+                    {sending ? '…' : 'ارسال ↑'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -453,23 +568,48 @@ export default function App() {
           <section className="workspace-layout">
             <div className="workspace-main glass">
               <div className="workspace-title">
-                <div><h2>Codex Agent</h2><p>وظیفه را بگو؛ Agent فایل‌ها را می‌خواند، برنامه‌ریزی می‌کند، تغییر می‌دهد و تست می‌کند.</p></div>
-                <span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>{workspaceGranted ? 'Workspace approved' : 'No workspace'}</span>
+                <div>
+                  <h2>Codex Agent</h2>
+                  <p>وظیفه را بگو؛ Agent فایل‌ها را می‌خواند، برنامه‌ریزی می‌کند، با اجازه تغییر می‌دهد و تست می‌کند.</p>
+                </div>
+                <span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>
+                  {workspaceGranted ? 'Workspace approved' : 'No workspace'}
+                </span>
               </div>
 
               <div className="field-row">
-                <input value={workspace} onChange={(event) => { setWorkspace(event.target.value); setWorkspaceGranted(false); }} placeholder="C:/Projects/MyApp" />
-                <button className="secondary" onClick={approveWorkspace}>Approve folder</button>
+                <input
+                  value={workspace}
+                  onChange={(event) => {
+                    setWorkspace(event.target.value);
+                    setWorkspaceGranted(false);
+                  }}
+                  placeholder="یک پوشه انتخاب کن یا مسیر را وارد کن"
+                />
+                <button className="secondary" onClick={browseWorkspace}>Browse…</button>
+                <button className="secondary" disabled={!workspace.trim()} onClick={approveWorkspace}>Approve</button>
               </div>
 
               <div className="agent-task-card">
-                <textarea value={agentTask} onChange={(event) => setAgentTask(event.target.value)} placeholder="مثلاً: پروژه را بررسی کن، خطاهای TypeScript را رفع کن و تست‌ها را اجرا کن." />
-                <button className="primary wide" disabled={!agentTask.trim() || agentRunning} onClick={runAgent}>{agentRunning ? 'Agent در حال کار است…' : 'شروع Codex Agent'}</button>
+                <textarea
+                  value={agentTask}
+                  onChange={(event) => setAgentTask(event.target.value)}
+                  placeholder="مثلاً: پروژه را بررسی کن، خطاهای TypeScript را رفع کن و تست‌ها را اجرا کن."
+                />
+                <div className="field-row">
+                  <button className="primary wide" disabled={!agentTask.trim() || agentRunning} onClick={runAgent}>
+                    {agentRunning ? 'Agent در حال کار است…' : 'شروع Codex Agent'}
+                  </button>
+                  <button className="secondary" disabled={!agentRunning} onClick={stopAgent}>Stop Agent</button>
+                </div>
               </div>
 
               <div className="codex-columns">
                 <div className="file-browser">
-                  <div className="panel-head"><span>Workspace files</span><button onClick={() => workspaceGranted && agent.listDirectory(workspace)}>Refresh</button></div>
+                  <div className="panel-head">
+                    <span>Workspace files</span>
+                    <button onClick={() => workspaceGranted && agent.listDirectory(workspace)}>Refresh</button>
+                  </div>
                   <div className="file-list">
                     {agent.entries.map((entry) => (
                       <button key={entry.path} onClick={() => entry.is_dir ? agent.listDirectory(entry.path) : openFile(entry.path)}>
@@ -482,26 +622,47 @@ export default function App() {
                 </div>
 
                 <div className="editor-panel">
-                  <div className="panel-head"><span>{selectedFile || 'File preview'}</span><button disabled={!selectedFile} onClick={saveSelectedFile}>Save</button></div>
-                  <textarea className="code-editor" value={editorValue} onChange={(event) => setEditorValue(event.target.value)} placeholder="فایل انتخابی اینجا نمایش داده می‌شود…" spellCheck={false} />
+                  <div className="panel-head">
+                    <span>{selectedFile || 'File preview'}</span>
+                    <button disabled={!selectedFile} onClick={saveSelectedFile}>Save</button>
+                  </div>
+                  <textarea
+                    className="code-editor"
+                    value={editorValue}
+                    onChange={(event) => setEditorValue(event.target.value)}
+                    placeholder="فایل انتخابی اینجا نمایش داده می‌شود…"
+                    spellCheck={false}
+                  />
                 </div>
               </div>
             </div>
 
             <aside className="inspector glass activity-inspector">
+              <h3>Permission Center</h3>
+              <Feature title="Workspace" value={workspaceGranted ? 'Approved' : 'Required'} ready={workspaceGranted} />
+              <Feature title="Read files" value={workspaceGranted ? 'Scoped' : 'Locked'} ready={workspaceGranted} />
+              <Feature title="Write files" value="Ask every time" ready />
+              <Feature title="Terminal" value="Ask every time" ready />
+              <Feature title="Auto backup" value="Enabled" ready />
+
+              <div className="divider" />
               <h3>Live Activity</h3>
               <div className="timeline">
-                {agentTimeline.map((item, index) => <div key={`${index}-${item}`} className="timeline-item"><i /><span>{item}</span></div>)}
+                {agentTimeline.map((item, index) => (
+                  <div key={`${index}-${item}`} className="timeline-item"><i /><span>{item}</span></div>
+                ))}
                 {agentTimeline.length === 0 ? <p>هنوز Task اجرا نشده.</p> : null}
               </div>
+
               <div className="divider" />
               <h3>Safety</h3>
               <ul>
-                <li>Read فقط داخل Workspace</li>
-                <li>Write نیازمند Approval</li>
-                <li>Terminal نیازمند Approval</li>
-                <li>بدون shell آزاد</li>
-                <li>حداکثر ۱۲ مرحله در هر اجرا</li>
+                <li>Read فقط داخل Workspace تأییدشده</li>
+                <li>Write و Terminal نیازمند Approval مستقیم</li>
+                <li>Backup خودکار قبل از تغییر فایل موجود</li>
+                <li>مسیر واقعی PC به Cloud planner ارسال نمی‌شود</li>
+                <li>بدون shell آزاد و با command allowlist</li>
+                <li>Stop Agent همیشه در دسترس است</li>
               </ul>
             </aside>
           </section>
@@ -510,26 +671,56 @@ export default function App() {
         {tab === 'computer' ? (
           <section className="workspace-layout">
             <div className="workspace-main glass">
-              <div className="workspace-title"><div><h2>Computer</h2><p>کنترل مستقیم ابزارهای Local با تأیید کاربر.</p></div><span className="workspace-status">Manual tools</span></div>
-              <div className="field-row"><input value={workspace} onChange={(event) => { setWorkspace(event.target.value); setWorkspaceGranted(false); }} /><button className="secondary" onClick={approveWorkspace}>Approve folder</button></div>
+              <div className="workspace-title">
+                <div>
+                  <h2>Computer</h2>
+                  <p>کنترل مستقیم ابزارهای Local با تأیید کاربر و محدوده Workspace.</p>
+                </div>
+                <span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>
+                  {workspaceGranted ? 'Permission active' : 'Manual tools'}
+                </span>
+              </div>
+
+              <div className="field-row">
+                <input
+                  value={workspace}
+                  onChange={(event) => {
+                    setWorkspace(event.target.value);
+                    setWorkspaceGranted(false);
+                  }}
+                  placeholder="Workspace"
+                />
+                <button className="secondary" onClick={browseWorkspace}>Browse…</button>
+                <button className="secondary" disabled={!workspace.trim()} onClick={approveWorkspace}>Approve</button>
+              </div>
+
               <div className="terminal-card">
                 <div className="terminal-fields">
                   <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="npm" />
                   <input value={commandArgs} onChange={(event) => setCommandArgs(event.target.value)} placeholder="run test" />
-                  <button className="primary" onClick={runManualCommand}>Run</button>
+                  <button className="primary" disabled={!workspaceGranted || agent.busy} onClick={runManualCommand}>Run</button>
                 </div>
                 <pre>{agent.terminalOutput || 'Terminal output will appear here.'}</pre>
               </div>
+
               <div className="future-grid">
                 <Feature title="Files" value="Active" ready />
                 <Feature title="Terminal" value="Active" ready />
+                <Feature title="Native folder picker" value="Active" ready />
+                <Feature title="Auto backup" value="Active" ready />
                 <Feature title="Browser" value="Next" />
                 <Feature title="Screen Vision" value="Next" />
-                <Feature title="Mouse / Keyboard" value="Later" />
-                <Feature title="Mobile Remote" value="Later" />
               </div>
             </div>
-            <aside className="inspector glass activity-inspector"><h3>Local Agent log</h3><div className="timeline">{agent.logs.map((item, index) => <div className="timeline-item" key={`${index}-${item}`}><i /><span>{item}</span></div>)}</div></aside>
+
+            <aside className="inspector glass activity-inspector">
+              <h3>Local Agent log</h3>
+              <div className="timeline">
+                {agent.logs.map((item, index) => (
+                  <div className="timeline-item" key={`${index}-${item}`}><i /><span>{item}</span></div>
+                ))}
+              </div>
+            </aside>
           </section>
         ) : null}
       </main>
@@ -541,7 +732,10 @@ export default function App() {
             <h2>{approval.title}</h2>
             <pre>{approval.detail}</pre>
             <p>این عملیات فقط با تأیید مستقیم شما انجام می‌شود.</p>
-            <div className="approval-actions"><button className="secondary" onClick={() => resolveApproval(false)}>لغو</button><button className="primary" onClick={() => resolveApproval(true)}>{approval.confirmLabel}</button></div>
+            <div className="approval-actions">
+              <button className="secondary" onClick={() => resolveApproval(false)}>لغو</button>
+              <button className="primary" onClick={() => resolveApproval(true)}>{approval.confirmLabel}</button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -558,12 +752,22 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
 
   async function submit() {
     if (!email.trim() || password.length < 6 || busy) return;
+
     setBusy(true);
     setStatus('');
     const result = mode === 'signin' ? await signIn(email, password) : await signUp(email, password);
     setBusy(false);
-    if (!result.ok) return setStatus(result.message);
-    if (result.needsEmailConfirmation) return setStatus('ایمیل تأیید ارسال شد. بعد از تأیید وارد حساب شو.');
+
+    if (!result.ok) {
+      setStatus(result.message);
+      return;
+    }
+
+    if (result.needsEmailConfirmation) {
+      setStatus('ایمیل تأیید ارسال شد. بعد از تأیید وارد حساب شو.');
+      return;
+    }
+
     onAuthenticated();
   }
 
@@ -574,25 +778,58 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
         <img src="/app-icon.png" alt="FarsiAI" />
         <h1>FarsiAI Desktop</h1>
         <p>همان حساب موبایل را وارد کن تا History، Wallet و Conversationها روی هر دو دستگاه یکی باشند.</p>
-        <div className="auth-tabs"><button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>ورود</button><button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>ساخت حساب</button></div>
+        <div className="auth-tabs">
+          <button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>ورود</button>
+          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>ساخت حساب</button>
+        </div>
         <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" dir="ltr" />
         <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" dir="ltr" />
         {status ? <div className="auth-status">{status}</div> : null}
-        <button className="primary wide" disabled={busy} onClick={submit}>{busy ? '…' : mode === 'signin' ? 'ورود به FarsiAI' : 'ساخت حساب'}</button>
+        <button className="primary wide" disabled={busy} onClick={submit}>
+          {busy ? '…' : mode === 'signin' ? 'ورود به FarsiAI' : 'ساخت حساب'}
+        </button>
         <small>کلیدهای privileged هرگز داخل Desktop ذخیره نمی‌شوند.</small>
       </section>
     </div>
   );
 }
 
-function NavButton({ active, label, caption, onClick }: { active: boolean; label: string; caption: string; onClick: () => void }) {
-  return <button className={active ? 'nav-button active' : 'nav-button'} onClick={onClick}><strong>{label}</strong><span>{caption}</span></button>;
+function NavButton({
+  active,
+  label,
+  caption,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  caption: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className={active ? 'nav-button active' : 'nav-button'} onClick={onClick}>
+      <strong>{label}</strong>
+      <span>{caption}</span>
+    </button>
+  );
 }
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function Feature({ title, value, ready = false }: { title: string; value: string; ready?: boolean }) {
-  return <div className={ready ? 'feature-card ready' : 'feature-card'}><strong>{title}</strong><span>{value}</span></div>;
+function Feature({
+  title,
+  value,
+  ready = false,
+}: {
+  title: string;
+  value: string;
+  ready?: boolean;
+}) {
+  return (
+    <div className={ready ? 'feature-card ready' : 'feature-card'}>
+      <strong>{title}</strong>
+      <span>{value}</span>
+    </div>
+  );
 }
