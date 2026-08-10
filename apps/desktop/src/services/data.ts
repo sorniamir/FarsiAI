@@ -22,6 +22,103 @@ export type StoredMessage = {
   createdAt?: string;
 };
 
+type CachedMessages = {
+  messages: StoredMessage[];
+  cachedAt: number;
+};
+
+const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const messageCache = new Map<string, CachedMessages>();
+const inFlightMessages = new Map<string, Promise<StoredMessage[]>>();
+const conversationVersions = new Map<string, string>();
+let prefetchPromise: Promise<void> | null = null;
+
+function isFresh(entry: CachedMessages | undefined): entry is CachedMessages {
+  return !!entry && Date.now() - entry.cachedAt < MESSAGE_CACHE_TTL_MS;
+}
+
+function mapStoredMessages(data: any[]): StoredMessage[] {
+  return data
+    .filter((row) => row.role === 'user' || row.role === 'assistant')
+    .map((row) => ({
+      id: String(row.id),
+      role: row.role as StoredMessage['role'],
+      content: String(row.content ?? ''),
+      imageUrl: row.image_url ? String(row.image_url) : undefined,
+      createdAt: row.created_at ? String(row.created_at) : undefined,
+    }));
+}
+
+async function fetchConversationMessages(conversationId: string): Promise<StoredMessage[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id,role,content,image_url,created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+    .limit(200);
+
+  if (error || !data) return [];
+  const messages = mapStoredMessages(data);
+  messageCache.set(conversationId, { messages, cachedAt: Date.now() });
+  return messages;
+}
+
+async function prefetchRecentConversations(conversations: ConversationSummary[]): Promise<void> {
+  if (!supabase || prefetchPromise) return prefetchPromise ?? Promise.resolve();
+
+  const ids = conversations
+    .slice(0, 6)
+    .map((item) => item.id)
+    .filter((id) => !isFresh(messageCache.get(id)) && !inFlightMessages.has(id));
+
+  if (ids.length === 0) return;
+
+  prefetchPromise = (async () => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id,conversation_id,role,content,image_url,created_at')
+      .in('conversation_id', ids)
+      .order('created_at', { ascending: true })
+      .limit(1200);
+
+    if (error || !data) return;
+
+    const grouped = new Map<string, any[]>();
+    for (const id of ids) grouped.set(id, []);
+    for (const row of data) {
+      const conversationId = String(row.conversation_id ?? '');
+      const bucket = grouped.get(conversationId);
+      if (bucket) bucket.push(row);
+    }
+
+    const cachedAt = Date.now();
+    for (const id of ids) {
+      messageCache.set(id, {
+        messages: mapStoredMessages(grouped.get(id) ?? []),
+        cachedAt,
+      });
+    }
+  })().finally(() => {
+    prefetchPromise = null;
+  });
+
+  return prefetchPromise;
+}
+
+export function invalidateConversationMessages(conversationId?: string): void {
+  if (!conversationId) return;
+  messageCache.delete(conversationId);
+}
+
+export function clearConversationMessageCache(): void {
+  messageCache.clear();
+  inFlightMessages.clear();
+  conversationVersions.clear();
+  prefetchPromise = null;
+}
+
 export async function getAccountSnapshot(): Promise<AccountSnapshot> {
   const fallback: AccountSnapshot = { plan: 'free' };
   if (!supabase) return fallback;
@@ -65,31 +162,36 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     .limit(60);
 
   if (error || !data) return [];
-  return data.map((row) => ({
+  const conversations = data.map((row) => ({
     id: String(row.id),
     title: String(row.title ?? 'گفتگوی جدید'),
     mode: (row.mode ?? 'chat') as ConversationSummary['mode'],
     updatedAt: String(row.updated_at),
   }));
+
+  for (const conversation of conversations) {
+    const previousVersion = conversationVersions.get(conversation.id);
+    if (previousVersion && previousVersion !== conversation.updatedAt) {
+      messageCache.delete(conversation.id);
+    }
+    conversationVersions.set(conversation.id, conversation.updatedAt);
+  }
+
+  // One background query warms the six most recent conversations.
+  void prefetchRecentConversations(conversations);
+  return conversations;
 }
 
 export async function getConversationMessages(conversationId: string): Promise<StoredMessage[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('messages')
-    .select('id,role,content,image_url,created_at')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
-    .limit(200);
+  const cached = messageCache.get(conversationId);
+  if (isFresh(cached)) return cached.messages;
 
-  if (error || !data) return [];
-  return data
-    .filter((row) => row.role === 'user' || row.role === 'assistant')
-    .map((row) => ({
-      id: String(row.id),
-      role: row.role as StoredMessage['role'],
-      content: String(row.content ?? ''),
-      imageUrl: row.image_url ? String(row.image_url) : undefined,
-      createdAt: row.created_at ? String(row.created_at) : undefined,
-    }));
+  const existing = inFlightMessages.get(conversationId);
+  if (existing) return existing;
+
+  const request = fetchConversationMessages(conversationId).finally(() => {
+    inFlightMessages.delete(conversationId);
+  });
+  inFlightMessages.set(conversationId, request);
+  return request;
 }

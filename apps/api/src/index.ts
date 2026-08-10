@@ -1,3 +1,5 @@
+export { GuestQuotaDurableObject } from './guest-quota-object';
+
 import { handleAgentPlan } from './ai/agent';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
