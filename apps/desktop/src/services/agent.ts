@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type AgentObservation = {
-  role: 'tool' | 'note';
+  role: string;
   name?: string;
   content: string;
 };
