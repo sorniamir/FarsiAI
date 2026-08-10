@@ -66,6 +66,11 @@ const tools = [
   },
 ];
 
+function cleanCodeContent(value: unknown, max = 120000): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\u0000/g, '').slice(0, max);
+}
+
 function normalizeToolCall(raw: unknown): ToolCall | null {
   if (!raw || typeof raw !== 'object') return null;
   const item = raw as Record<string, unknown>;
@@ -92,7 +97,7 @@ function normalizeToolCall(raw: unknown): ToolCall | null {
     args.path = path;
   }
   if (nameValue === 'write_file') {
-    args.content = sanitizeText(String(args.content ?? ''), 120000);
+    args.content = cleanCodeContent(args.content);
   }
   if (nameValue === 'run_command') {
     const command = String(args.command ?? '').toLowerCase();
