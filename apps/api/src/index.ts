@@ -40,7 +40,7 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.3.2' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.3.3' });
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/ai') {
