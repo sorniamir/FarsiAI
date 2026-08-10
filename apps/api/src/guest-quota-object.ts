@@ -36,7 +36,11 @@ function quota(state: GuestQuotaState) {
 }
 
 export class GuestQuotaDurableObject {
-  constructor(private readonly state: DurableStateLike) {}
+  private readonly state: DurableStateLike;
+
+  constructor(state: DurableStateLike) {
+    this.state = state;
+  }
 
   private async readState(): Promise<GuestQuotaState> {
     const day = utcDay();
