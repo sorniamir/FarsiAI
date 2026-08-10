@@ -17,6 +17,23 @@ function createEnv(overrides: Partial<Env> = {}): Env {
   };
 }
 
+function guestQuotaEnv(overrides: Partial<Env> = {}): Env {
+  return createEnv({
+    SUPABASE_URL: 'https://project.supabase.co',
+    SUPABASE_SECRET_KEY: 'sb_secret_test',
+    ...overrides,
+  });
+}
+
+function mockGuestQuotaFetch(quota = { chatRemaining: 4, imageRemaining: 2 }) {
+  globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json(quota);
+    if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
 function aiRequest(body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('https://api.example.com/v1/ai', {
     method: 'POST',
@@ -49,7 +66,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.0' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.1' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -59,6 +76,49 @@ describe('FarsiAI Worker', () => {
 
     assert.equal(response.status, 401);
     assert.equal(env.AI.run.mock.callCount(), 0);
+  });
+
+  it('falls back to the secondary Codex model and returns a real tool call', async () => {
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: 'user-1', email: 'user@example.com' });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    let modelCall = 0;
+    const aiRun = mock.fn(async (model: string) => {
+      modelCall += 1;
+      if (modelCall === 1) throw new Error('primary model temporarily unavailable');
+      assert.equal(model, '@cf/zai-org/glm-4.7-flash');
+      return {
+        tool_calls: [
+          { name: 'read_file', arguments: { path: 'package.json' } },
+        ],
+      };
+    });
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(
+      agentRequest(
+        { task: 'package.json را بخوان', workspace: 'approved-workspace', observations: [] },
+        { authorization: 'Bearer user-access-token', 'cf-ray': 'codex-test-ray' },
+      ),
+      env,
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      type: 'tool',
+      tool: { name: 'read_file', arguments: { path: 'package.json' } },
+      model: '@cf/zai-org/glm-4.7-flash',
+    });
+    assert.equal(aiRun.mock.callCount(), 2);
   });
 
   it('rejects malformed JSON and unsupported modes as client errors', async () => {
@@ -72,23 +132,50 @@ describe('FarsiAI Worker', () => {
     assert.equal(env.AI.run.mock.callCount(), 0);
   });
 
-  it('serves a guest chat request through the configured limiter and AI binding', async () => {
-    const env = createEnv();
+  it('serves a guest chat request through quota, limiter and AI binding', async () => {
+    mockGuestQuotaFetch();
+    const env = guestQuotaEnv();
     const response = await worker.fetch(
       aiRequest({ mode: 'chat', message: 'ping', history: [] }, { 'cf-connecting-ip': '203.0.113.8' }),
       env,
     );
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, mode: 'chat', text: 'pong' });
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      mode: 'chat',
+      text: 'pong',
+      quota: { chatRemaining: 4, imageRemaining: 2 },
+    });
     assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 1);
     assert.equal(env.AI.run.mock.callCount(), 1);
     assert.equal(env.AI.run.mock.calls[0].arguments[0], '@cf/qwen/qwen3-30b-a3b-fp8');
   });
 
+  it('maps exhausted guest chat quota to a safe 402 response', async () => {
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/rpc/use_guest_daily_quota')) {
+        return Response.json({ code: 'P0001', message: 'daily_chat_limit' }, { status: 400 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const env = guestQuotaEnv();
+    const response = await worker.fetch(
+      aiRequest({ mode: 'chat', message: 'ping' }, { 'cf-connecting-ip': '203.0.113.8' }),
+      env,
+    );
+
+    assert.equal(response.status, 402);
+    assert.match((await response.json() as { error: string }).error, /۵ پیام/);
+    assert.equal(env.AI.run.mock.callCount(), 0);
+  });
+
   it('sends Persian directly to the chat model without translation', async () => {
+    mockGuestQuotaFetch();
     let call = 0;
-    const env = createEnv({
+    const env = guestQuotaEnv({
       AI: {
         run: mock.fn(async () => ({
           response: call++ === 0
@@ -122,8 +209,9 @@ describe('FarsiAI Worker', () => {
   });
 
   it('returns the original Persian answer if the language review is unavailable', async () => {
+    mockGuestQuotaFetch();
     let call = 0;
-    const env = createEnv({
+    const env = guestQuotaEnv({
       AI: {
         run: mock.fn(async () => {
           if (call++ === 0) return { response: 'پاسخ فارسی اولیه.' };

@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
 #[derive(Serialize)]
@@ -39,13 +40,44 @@ fn canonical_for_write(path: &str) -> Result<PathBuf, String> {
     Ok(parent.join(file_name))
 }
 
+fn workspace_root(state: &State<AppState>, target: &Path) -> Result<PathBuf, String> {
+    let allowed = state
+        .allowed_paths
+        .lock()
+        .map_err(|_| "Permission state unavailable".to_string())?;
+
+    allowed
+        .iter()
+        .filter(|base| target.starts_with(base))
+        .max_by_key(|base| base.components().count())
+        .cloned()
+        .ok_or_else(|| "Access denied. Approve the workspace directory first.".to_string())
+}
+
 fn ensure_access(state: &State<AppState>, target: &Path) -> Result<(), String> {
-    let allowed = state.allowed_paths.lock().map_err(|_| "Permission state unavailable".to_string())?;
-    if allowed.iter().any(|base| target.starts_with(base)) {
-        Ok(())
-    } else {
-        Err("Access denied. Approve the workspace directory first.".to_string())
+    workspace_root(state, target).map(|_| ())
+}
+
+fn create_backup(state: &State<AppState>, target: &Path) -> Result<Option<PathBuf>, String> {
+    if !target.exists() || !target.is_file() {
+        return Ok(None);
     }
+
+    let root = workspace_root(state, target)?;
+    let backup_dir = root.join(".farsiai-backups");
+    fs::create_dir_all(&backup_dir).map_err(|error| error.to_string())?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis();
+    let file_name = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("file");
+    let backup = backup_dir.join(format!("{timestamp}-{file_name}.bak"));
+    fs::copy(target, &backup).map_err(|error| error.to_string())?;
+    Ok(Some(backup))
 }
 
 fn normalize_program(command: &str) -> String {
@@ -114,13 +146,17 @@ pub fn read_text_file(path: String, state: State<AppState>) -> Result<String, St
 }
 
 #[tauri::command]
-pub fn write_text_file(path: String, content: String, state: State<AppState>) -> Result<(), String> {
+pub fn write_text_file(path: String, content: String, state: State<AppState>) -> Result<String, String> {
     if content.len() > 5_000_000 {
         return Err("Refusing to write a text file larger than 5 MB in this version.".to_string());
     }
     let target = canonical_for_write(&path)?;
     ensure_access(&state, &target)?;
-    fs::write(target, content).map_err(|error| error.to_string())
+    let backup = create_backup(&state, &target)?;
+    fs::write(&target, content).map_err(|error| error.to_string())?;
+    Ok(backup
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_default())
 }
 
 #[tauri::command]

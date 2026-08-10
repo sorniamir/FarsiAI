@@ -1,7 +1,12 @@
 import { handleAgentPlan } from './ai/agent';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
-import { refundDailyQuota, spendDailyQuota } from './lib/credits';
+import {
+  refundDailyQuota,
+  refundGuestDailyQuota,
+  spendDailyQuota,
+  spendGuestDailyQuota,
+} from './lib/credits';
 import { corsHeaders, json } from './lib/http';
 import { sanitizeText } from './lib/language';
 import { ensureConversation, saveMessage } from './lib/persistence';
@@ -30,18 +35,22 @@ async function guestActorKey(request: Request): Promise<string> {
   return `guest:${hex.slice(0, 32)}`;
 }
 
+type ChargedRequest =
+  | { kind: 'user'; userId: string; requestId: string }
+  | { kind: 'guest'; actorKey: string; requestId: string };
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const requestId = request.headers.get('cf-ray') || crypto.randomUUID();
-    let charged: { userId: string; requestId: string } | null = null;
+    let charged: ChargedRequest | null = null;
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.0' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.1' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
@@ -66,7 +75,6 @@ export default {
 
       const message = sanitizeText(payload.message, 6000);
       const mode = payload.mode;
-
       if (!message) return json(env, { ok: false, error: 'پیام خالی است.' }, 400);
 
       const auth = await resolveAuth(request, env);
@@ -77,7 +85,8 @@ export default {
         return json(env, { ok: false, error: 'اتصال حساب کاربری به سرور هنوز کامل نشده است.' }, 503);
       }
 
-      const actorKey = auth.kind === 'user' ? `user:${auth.user.id}` : await guestActorKey(request);
+      const guestKey = auth.kind === 'guest' ? await guestActorKey(request) : undefined;
+      const actorKey = auth.kind === 'user' ? `user:${auth.user.id}` : guestKey!;
       const limiter = mode === 'image' ? env.IMAGE_RATE_LIMITER : env.API_RATE_LIMITER;
       const { success } = await limiter.limit({ key: `${actorKey}:${mode}` });
 
@@ -91,7 +100,6 @@ export default {
 
       if (auth.kind === 'user') {
         const spend = await spendDailyQuota(env, auth.user.id, mode, requestId);
-
         if (!spend.ok) {
           if (spend.reason === 'chat_limit') {
             return json(env, { ok: false, error: 'سهمیه ۱۰ پیام امروز تمام شده است. فردا دوباره شارژ می‌شود.' }, 402);
@@ -100,13 +108,13 @@ export default {
             return json(env, { ok: false, error: 'سهمیه ۴ تصویر امروز تمام شده است. فردا دوباره شارژ می‌شود.' }, 402);
           }
           if (spend.reason === 'unconfigured') {
-            return json(env, { ok: false, error: 'سیستم اعتبار سرور هنوز تنظیم نشده است.' }, 503);
+            return json(env, { ok: false, error: 'سیستم سهمیه سرور هنوز تنظیم نشده است.' }, 503);
           }
-          return json(env, { ok: false, error: 'بررسی اعتبار موقتاً در دسترس نیست.' }, 503);
+          return json(env, { ok: false, error: 'بررسی سهمیه موقتاً در دسترس نیست.' }, 503);
         }
 
         quota = spend.quota;
-        charged = { userId: auth.user.id, requestId };
+        charged = { kind: 'user', userId: auth.user.id, requestId };
 
         try {
           const persistedId = await ensureConversation(
@@ -127,6 +135,22 @@ export default {
             message: persistenceError instanceof Error ? persistenceError.message : 'unknown_persistence_error',
           }));
         }
+      } else {
+        const spend = await spendGuestDailyQuota(env, guestKey!, mode, requestId);
+        if (!spend.ok) {
+          if (spend.reason === 'chat_limit') {
+            return json(env, { ok: false, error: 'سهمیه مهمان ۵ پیام امروز تمام شده است. برای سهمیه بیشتر وارد حساب شو.' }, 402);
+          }
+          if (spend.reason === 'image_limit') {
+            return json(env, { ok: false, error: 'سهمیه مهمان ۲ تصویر امروز تمام شده است. برای سهمیه بیشتر وارد حساب شو.' }, 402);
+          }
+          if (spend.reason === 'unconfigured') {
+            return json(env, { ok: false, error: 'سیستم سهمیه مهمان هنوز تنظیم نشده است.' }, 503);
+          }
+          return json(env, { ok: false, error: 'بررسی سهمیه مهمان موقتاً در دسترس نیست.' }, 503);
+        }
+        quota = spend.quota;
+        charged = { kind: 'guest', actorKey: guestKey!, requestId };
       }
 
       console.log(JSON.stringify({
@@ -194,10 +218,14 @@ export default {
     } catch (error) {
       if (charged) {
         try {
-          await refundDailyQuota(env, charged.userId, charged.requestId);
+          if (charged.kind === 'user') {
+            await refundDailyQuota(env, charged.userId, charged.requestId);
+          } else {
+            await refundGuestDailyQuota(env, charged.actorKey, charged.requestId);
+          }
         } catch (refundError) {
           console.error(JSON.stringify({
-            event: 'credit_refund_exception',
+            event: 'quota_refund_exception',
             requestId,
             message: refundError instanceof Error ? refundError.message : 'unknown_refund_error',
           }));

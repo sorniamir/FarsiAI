@@ -23,6 +23,7 @@ export async function planAgentStep(input: {
   task: string;
   workspace: string;
   observations: AgentObservation[];
+  signal?: AbortSignal;
 }): Promise<AgentPlanResponse> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
 
@@ -35,6 +36,7 @@ export async function planAgentStep(input: {
   const response = await fetch(`${API_URL}/v1/agent/plan`, {
     method: 'POST',
     headers,
+    signal: input.signal,
     body: JSON.stringify({
       task: input.task,
       workspace: 'approved-workspace',
