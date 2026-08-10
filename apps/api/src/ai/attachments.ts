@@ -5,6 +5,7 @@ const MAX_ATTACHMENTS = 4;
 const MAX_ATTACHMENT_BYTES = 6 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 12 * 1024 * 1024;
 const MAX_CONTEXT_CHARS = 18_000;
+const EDITABLE_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const SUPPORTED_MIME_TYPES = new Set([
   'application/pdf',
@@ -83,8 +84,12 @@ export function normalizeAttachments(value: unknown): AiAttachment[] {
   return attachments;
 }
 
+export function isEditableImageMime(mimeType: string): boolean {
+  return EDITABLE_IMAGE_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
 export function firstImageAttachment(attachments: AiAttachment[]): AiAttachment | undefined {
-  return attachments.find((item) => item.mimeType.startsWith('image/'));
+  return attachments.find((item) => isEditableImageMime(item.mimeType));
 }
 
 export async function attachmentContext(env: Env, attachments: AiAttachment[]): Promise<string> {
