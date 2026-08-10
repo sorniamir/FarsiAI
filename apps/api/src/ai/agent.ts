@@ -174,7 +174,7 @@ function taskRequirements(task: string, observations: AgentObservation[]) {
   const normalized = task.toLowerCase();
   const createRequested = /(create|make\s+(a\s+)?file|new\s+file|فایل.*(بساز|ایجاد)|بساز|ایجاد کن)/iu.test(normalized);
   const writeRequested = /(create|write|save|edit|modify|replace|update|make\s+(a\s+)?file|فایل.*(بساز|ایجاد|ذخیره|ویرایش|تغییر)|بساز|ایجاد کن|ذخیره کن|ویرایش کن|تغییر بده|به.?روزرسانی)/iu.test(normalized);
-  const commandRequested = /(\brun\b|\bbuild\b|\btest\b|\binstall\b|\bnpm\b|\bnpx\b|\bpnpm\b|\byarn\b|\bgit\b|\bpython\b|اجرا کن|بیلد|تست کن|نصب کن|کامپایل)/iu.test(normalized);
+  const commandRequested = /(?:\brun\s+(?:the\s+)?(?:tests?|build|command)\b|\b(?:npm|npx|node|pnpm|yarn|git|python|python3)\b|\b(?:build|test|install|compile)\s+(?:it|this|the|project|app|code|tests?)\b|اجرا\s*کن|بیلد\s*کن|تست\s*کن|نصب\s*کن|کامپایل\s*کن)/iu.test(normalized);
   const verifyRequested = /(verify|confirm|read it back|check it|دوباره.*بخوان|تأیید کن|چک کن|بررسی.*فایل)/iu.test(normalized);
   const denied = observations.some((item) => item.content.trim().toUpperCase().startsWith('USER_DENIED_'));
   const writeIndex = lastSuccessfulIndex(observations, 'write_file');
