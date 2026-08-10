@@ -58,9 +58,14 @@ export function useDesktopAgent() {
   ), [runBusy]);
 
   const writeFile = useCallback(async (path: string, content: string) => runBusy(
-    `فایل ذخیره شد: ${path}`,
-    () => invoke<void>('write_text_file', { path, content }),
-  ), [runBusy]);
+    `در حال ذخیره فایل: ${path}`,
+    async () => {
+      const backupPath = await invoke<string>('write_text_file', { path, content });
+      if (backupPath) pushLog(`Backup ساخته شد: ${backupPath}`);
+      pushLog(`فایل ذخیره شد: ${path}`);
+      return backupPath;
+    },
+  ), [pushLog, runBusy]);
 
   const runCommand = useCallback(async (command: string, args: string[], cwd: string) => runBusy(
     `اجرای دستور: ${command} ${args.join(' ')}`,
