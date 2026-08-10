@@ -29,18 +29,15 @@ function imagePrompt(prompt: string, referencePrompt?: string): string {
 }
 
 function extractGeminiImage(payload: any): { data: string; mimeType: string } | null {
-  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
-  for (const candidate of candidates) {
-    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
-    for (const part of parts) {
-      const inline = part?.inlineData ?? part?.inline_data;
-      const data = typeof inline?.data === 'string' ? inline.data.trim() : '';
+  const steps = Array.isArray(payload?.steps) ? payload.steps : [];
+  for (const step of steps) {
+    if (step?.type !== 'model_output') continue;
+    const content = Array.isArray(step?.content) ? step.content : [];
+    for (const item of content) {
+      if (item?.type !== 'image') continue;
+      const data = typeof item?.data === 'string' ? item.data.trim() : '';
       if (!data) continue;
-      const mimeType = typeof inline?.mimeType === 'string'
-        ? inline.mimeType
-        : typeof inline?.mime_type === 'string'
-          ? inline.mime_type
-          : 'image/png';
+      const mimeType = typeof item?.mime_type === 'string' ? item.mime_type : 'image/png';
       return { data, mimeType };
     }
   }
@@ -57,39 +54,34 @@ async function runNanoBanana(
 
   const model = env.NANO_BANANA_MODEL?.trim() || DEFAULT_NANO_BANANA_MODEL;
   const reference = parseImageDataUrl(referenceImage);
-  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+  const input: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
   if (reference) {
-    parts.unshift({
-      inline_data: {
-        mime_type: reference.mimeType,
-        data: reference.base64,
-      },
+    input.push({
+      type: 'image',
+      mime_type: reference.mimeType,
+      data: reference.base64,
     });
   }
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            responseModalities: ['TEXT', 'IMAGE'],
-            responseFormat: {
-              image: {
-                aspectRatio: '1:1',
-                imageSize: '1K',
-              },
-            },
-          },
-        }),
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': apiKey,
+        'api-revision': '2026-05-20',
       },
-    );
+      body: JSON.stringify({
+        model,
+        input,
+        response_format: {
+          type: 'image',
+          mime_type: 'image/png',
+          aspect_ratio: '1:1',
+          image_size: '1K',
+        },
+      }),
+    });
 
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 800);
