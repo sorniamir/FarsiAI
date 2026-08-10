@@ -14,6 +14,7 @@ pub struct AppState {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             tools::grant_directory_access,
