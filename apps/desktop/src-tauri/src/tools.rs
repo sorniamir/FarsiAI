@@ -48,6 +48,25 @@ fn ensure_access(state: &State<AppState>, target: &Path) -> Result<(), String> {
     }
 }
 
+fn normalize_program(command: &str) -> String {
+    let lowered = command.trim().to_lowercase();
+    lowered
+        .strip_suffix(".exe")
+        .or_else(|| lowered.strip_suffix(".cmd"))
+        .unwrap_or(&lowered)
+        .to_string()
+}
+
+fn platform_program(normalized: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        if matches!(normalized, "npm" | "npx" | "pnpm" | "yarn") {
+            return format!("{normalized}.cmd");
+        }
+    }
+    normalized.to_string()
+}
+
 #[tauri::command]
 pub fn grant_directory_access(path: String, state: State<AppState>) -> Result<(), String> {
     let canonical = canonical_existing(&path)?;
@@ -117,9 +136,8 @@ pub fn run_command(
         return Err("Too many command arguments.".to_string());
     }
 
-    let normalized = command.trim().to_lowercase();
-    let normalized = normalized.strip_suffix(".exe").unwrap_or(&normalized);
-    if !ALLOWED_PROGRAMS.contains(&normalized) {
+    let normalized = normalize_program(&command);
+    if !ALLOWED_PROGRAMS.contains(&normalized.as_str()) {
         return Err("Command is not in the desktop safe allowlist.".to_string());
     }
 
@@ -129,7 +147,8 @@ pub fn run_command(
         return Err("Working directory is invalid.".to_string());
     }
 
-    let output = Command::new(&command)
+    let executable = platform_program(&normalized);
+    let output = Command::new(executable)
         .args(&args)
         .current_dir(working_directory)
         .output()
