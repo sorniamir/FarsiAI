@@ -1,6 +1,6 @@
 name = "farsiai-api"
 main = "src/index.ts"
-compatibility_date = "2026-08-09"
+compatibility_date = "2026-08-11"
 compatibility_flags = ["nodejs_compat"]
 keep_vars = true
 
@@ -28,3 +28,4 @@ namespace_id = "9203102"
 
 [vars]
 ALLOWED_ORIGIN = "*"
+NANO_BANANA_MODEL = "gemini-3.1-flash-lite-image"
