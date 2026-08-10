@@ -2,7 +2,7 @@ name: Desktop Windows
 
 on:
   push:
-    branches: [main, "agent/desktop-*"]
+    branches: [main, "agent/desktop-*", "fix/codex-*"]
     paths:
       - "apps/desktop/**"
       - "apps/api/src/ai/agent.ts"
@@ -43,6 +43,9 @@ jobs:
 
       - name: Typecheck desktop
         run: npm run check:desktop
+
+      - name: Test Codex desktop path contract
+        run: node --experimental-strip-types apps/desktop/test/agent-path.test.mjs
 
       - name: Generate approved Windows icons
         run: npm --workspace apps/desktop run icons
