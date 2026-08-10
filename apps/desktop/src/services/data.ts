@@ -1,10 +1,10 @@
 import { supabase } from '../lib/supabase';
+import type { DailyQuota } from './api';
 
 export type AccountSnapshot = {
   email?: string;
   displayName?: string;
   plan: 'free' | 'pro' | 'admin';
-  credits: number | null;
 };
 
 export type ConversationSummary = {
@@ -23,20 +23,36 @@ export type StoredMessage = {
 };
 
 export async function getAccountSnapshot(): Promise<AccountSnapshot> {
-  const fallback: AccountSnapshot = { plan: 'free', credits: null };
+  const fallback: AccountSnapshot = { plan: 'free' };
   if (!supabase) return fallback;
 
-  const [{ data: authData }, { data: profile }, { data: wallet }] = await Promise.all([
+  const [{ data: authData }, { data: profile }] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('profiles').select('display_name,plan').single(),
-    supabase.from('credit_wallets').select('balance').single(),
   ]);
 
   return {
     email: authData.user?.email ?? undefined,
     displayName: profile?.display_name ? String(profile.display_name) : undefined,
     plan: (profile?.plan ?? 'free') as AccountSnapshot['plan'],
-    credits: wallet ? Number(wallet.balance) : null,
+  };
+}
+
+export async function getCurrentDailyQuota(): Promise<DailyQuota> {
+  const full: DailyQuota = { chatRemaining: 10, imageRemaining: 4 };
+  if (!supabase) return full;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('daily_usage')
+    .select('chat_used,image_used')
+    .eq('usage_date', today)
+    .maybeSingle();
+
+  if (error || !data) return full;
+  return {
+    chatRemaining: Math.max(0, 10 - Number(data.chat_used ?? 0)),
+    imageRemaining: Math.max(0, 4 - Number(data.image_used ?? 0)),
   };
 }
 
