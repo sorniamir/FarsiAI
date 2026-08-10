@@ -41,7 +41,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.3' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.3.4' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -99,7 +99,8 @@ describe('FarsiAI Worker', () => {
     assert.equal(input.messages.at(-1)?.content, 'چرا آسمان آبی است؟');
     assert.ok(input.messages.some((item) => item.content === 'قبلاً درباره نور صحبت کردیم.'));
 
-    const [, reviewInput] = env.AI.run.mock.calls[1].arguments as [string, { messages: Array<{ role: string; content: string }> }];
+    const [reviewModel, reviewInput] = env.AI.run.mock.calls[1].arguments as [string, { messages: Array<{ role: string; content: string }> }];
+    assert.equal(reviewModel, '@cf/openai/gpt-oss-120b');
     assert.match(reviewInput.messages.at(-1)?.content ?? '', /چشم‌ها ما/);
     assert.match(reviewInput.messages.at(-1)?.content ?? '', /چرا آسمان آبی است/);
   });
@@ -123,7 +124,7 @@ describe('FarsiAI Worker', () => {
   });
 
   it('removes hidden reasoning and raw Markdown from assistant text', () => {
-    const raw = '<think>internal reasoning</think>\n\n**پاسخ روشن**\n* مورد اول\nمتن _ساده_ و `دقیق`.';
+    const raw = '<think>internal reasoning</think>\n\n**پاسخ روشن**  \n* مورد اول\nمتن _ساده_ و `دقیق`.';
 
     assert.equal(normalizeAssistantText(raw), 'پاسخ روشن\n• مورد اول\nمتن ساده و دقیق.');
   });
