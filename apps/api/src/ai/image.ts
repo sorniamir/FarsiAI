@@ -5,12 +5,17 @@ import { translate } from './translate';
 const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
 const IMAGE_EDIT_MODEL = '@cf/runwayml/stable-diffusion-v1-5-img2img';
 const DEFAULT_NANO_BANANA_MODEL = 'gemini-3.1-flash-lite-image';
+const MAX_PROVIDER_PROMPT = 1900;
 
 function parseImageDataUrl(dataUrl?: string): { mimeType: string; base64: string } | undefined {
   if (!dataUrl) return undefined;
   const match = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/i);
   if (!match || match[2].length > 8_500_000) return undefined;
   return { mimeType: match[1].toLowerCase(), base64: match[2] };
+}
+
+function compactPrompt(value: string, limit = MAX_PROVIDER_PROMPT): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, limit);
 }
 
 function randomSeed(): number {
@@ -20,12 +25,14 @@ function randomSeed(): number {
 }
 
 function imagePrompt(prompt: string, referencePrompt?: string): string {
-  if (!referencePrompt) return `${prompt}. High quality, coherent composition, detailed, visually polished.`;
-  return [
-    `Original image context: ${referencePrompt}.`,
-    `Requested edit: ${prompt}.`,
+  if (!referencePrompt) {
+    return compactPrompt(`${prompt}. High quality, coherent composition, detailed, visually polished.`);
+  }
+  return compactPrompt([
+    `Original image context: ${compactPrompt(referencePrompt, 650)}.`,
+    `Requested edit: ${compactPrompt(prompt, 950)}.`,
     'Preserve the original subject, identity, composition, and visual continuity unless the request explicitly changes them. High quality and visually polished.',
-  ].join(' ');
+  ].join(' '));
 }
 
 function extractGeminiImage(payload: any): { data: string; mimeType: string } | null {
@@ -126,9 +133,11 @@ export async function runImage(
   referenceImage?: string,
   referencePrompt?: string,
 ): Promise<{ image: string; prompt: string; edited: boolean; provider: string }> {
-  const prompt = containsPersian(userPrompt)
+  const translatedPrompt = containsPersian(userPrompt)
     ? await translate(env, userPrompt, 'fa', 'en')
     : userPrompt;
+  const prompt = compactPrompt(translatedPrompt, 1500);
+  if (!prompt) throw new Error('Empty image prompt');
 
   const reference = parseImageDataUrl(referenceImage);
   const finalPrompt = imagePrompt(prompt, reference ? referencePrompt : undefined);
