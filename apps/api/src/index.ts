@@ -35,6 +35,27 @@ async function guestActorKey(request: Request): Promise<string> {
   return `guest:${hex.slice(0, 32)}`;
 }
 
+async function detectLocalAgentSideEffectFailure(request: Request): Promise<{ tool: 'write_file' | 'run_command'; detail: string } | null> {
+  try {
+    const payload = await request.clone().json() as Record<string, unknown>;
+    const observations = Array.isArray(payload.observations) ? payload.observations : [];
+    const last = observations.length > 0 ? observations[observations.length - 1] : undefined;
+    if (!last || typeof last !== 'object') return null;
+
+    const item = last as Record<string, unknown>;
+    if (item.role !== 'tool' || (item.name !== 'write_file' && item.name !== 'run_command')) return null;
+    const content = String(item.content ?? '').trim();
+    if (!content.toUpperCase().startsWith('ERROR:')) return null;
+
+    return {
+      tool: item.name,
+      detail: sanitizeText(content.replace(/^ERROR:\s*/i, ''), 1200),
+    };
+  } catch {
+    return null;
+  }
+}
+
 type ChargedRequest =
   | { kind: 'user'; userId: string; requestId: string }
   | { kind: 'guest'; actorKey: string; requestId: string };
@@ -54,6 +75,20 @@ export default {
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
+      const localFailure = await detectLocalAgentSideEffectFailure(request);
+      if (localFailure) {
+        const action = localFailure.tool === 'write_file' ? 'نوشتن فایل' : 'اجرای دستور';
+        return json(
+          env,
+          {
+            ok: false,
+            error: `اجرای محلی ${action} ناموفق شد و Agent برای جلوگیری از تکرار مجوز متوقف شد.${localFailure.detail ? ` جزئیات: ${localFailure.detail}` : ''}`,
+            code: 'CODEX_LOCAL_TOOL_FAILED',
+            requestId,
+          },
+          409,
+        );
+      }
       return handleAgentPlan(request, env);
     }
 
