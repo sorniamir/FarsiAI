@@ -9,8 +9,10 @@ type AgentObservation = {
   content: string;
 };
 
+type ToolName = 'list_directory' | 'read_file' | 'write_file' | 'run_command';
+
 type ToolCall = {
-  name: 'list_directory' | 'read_file' | 'write_file' | 'run_command';
+  name: ToolName;
   arguments: Record<string, unknown>;
 };
 
@@ -24,7 +26,7 @@ const AGENT_MODELS = [
   '@cf/zai-org/glm-4.7-flash',
 ] as const;
 
-const TOOL_NAMES = new Set(['list_directory', 'read_file', 'write_file', 'run_command']);
+const TOOL_NAMES = new Set<ToolName>(['list_directory', 'read_file', 'write_file', 'run_command']);
 const COMMANDS = new Set(['npm', 'npx', 'node', 'git', 'python', 'python3', 'pnpm', 'yarn']);
 
 const tools = [
@@ -52,7 +54,7 @@ const tools = [
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Relative file path inside workspace.' },
+        path: { type: 'string', description: 'Relative file path inside workspace. Do not prefix with approved-workspace or workspace.' },
         content: { type: 'string', description: 'Complete desired UTF-8 file content.' },
       },
       required: ['path', 'content'],
@@ -73,11 +75,24 @@ const tools = [
       required: ['command', 'args'],
     },
   },
-];
+] as const;
 
 function cleanCodeContent(value: unknown, max = 120000): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\u0000/g, '').slice(0, max);
+}
+
+function normalizeRelativePath(value: unknown): string | null {
+  const raw = sanitizeText(String(value ?? '.'), 700).trim().replace(/\\/g, '/');
+  let path = raw.replace(/^\/+/, '').replace(/^\.\//, '');
+  path = path.replace(/^(approved-workspace|workspace)(?:\/|$)/i, '');
+  path = path.replace(/^\/+/, '');
+
+  if (!path || path === '.') return '.';
+  if (/^[a-zA-Z]:\//.test(path) || path.startsWith('//')) return null;
+  const parts = path.split('/').filter(Boolean);
+  if (parts.some((part) => part === '..')) return null;
+  return parts.join('/');
 }
 
 function normalizeToolCall(raw: unknown): ToolCall | null {
@@ -87,7 +102,7 @@ function normalizeToolCall(raw: unknown): ToolCall | null {
     ? item.function as Record<string, unknown>
     : undefined;
   const nameValue = functionPayload?.name ?? item.name;
-  if (typeof nameValue !== 'string' || !TOOL_NAMES.has(nameValue)) return null;
+  if (typeof nameValue !== 'string' || !TOOL_NAMES.has(nameValue as ToolName)) return null;
 
   let argsValue: unknown = functionPayload?.arguments ?? item.arguments ?? {};
   if (typeof argsValue === 'string') {
@@ -101,8 +116,8 @@ function normalizeToolCall(raw: unknown): ToolCall | null {
 
   const args = argsValue as Record<string, unknown>;
   if ('path' in args) {
-    const path = sanitizeText(String(args.path ?? '.'), 700).replace(/^[\\/]+/, '');
-    if (!path || path.split(/[\\/]+/).includes('..')) return null;
+    const path = normalizeRelativePath(args.path);
+    if (!path) return null;
     args.path = path;
   }
   if (nameValue === 'write_file') {
@@ -116,7 +131,7 @@ function normalizeToolCall(raw: unknown): ToolCall | null {
     args.args = rawArgs.slice(0, 32).map((value) => sanitizeText(String(value), 600));
   }
 
-  return { name: nameValue as ToolCall['name'], arguments: args };
+  return { name: nameValue as ToolName, arguments: args };
 }
 
 function extractToolCall(result: any): ToolCall | null {
@@ -130,13 +145,13 @@ function extractText(result: any): string {
   return sanitizeText(typeof value === 'string' ? value : JSON.stringify(value), 6000);
 }
 
-function successfulObservation(observation: AgentObservation, name: ToolCall['name']): boolean {
+function successfulObservation(observation: AgentObservation, name: ToolName): boolean {
   if (observation.role !== 'tool' || observation.name !== name) return false;
   const content = observation.content.trim().toUpperCase();
   return !content.startsWith('ERROR:') && !content.startsWith('USER_DENIED_');
 }
 
-function lastSuccessfulIndex(observations: AgentObservation[], name: ToolCall['name']): number {
+function lastSuccessfulIndex(observations: AgentObservation[], name: ToolName): number {
   for (let index = observations.length - 1; index >= 0; index -= 1) {
     if (successfulObservation(observations[index], name)) return index;
   }
@@ -145,6 +160,7 @@ function lastSuccessfulIndex(observations: AgentObservation[], name: ToolCall['n
 
 function taskRequirements(task: string, observations: AgentObservation[]) {
   const normalized = task.toLowerCase();
+  const createRequested = /(create|make\s+(a\s+)?file|new\s+file|فایل.*(بساز|ایجاد)|بساز|ایجاد کن)/iu.test(normalized);
   const writeRequested = /(create|write|save|edit|modify|replace|update|make\s+(a\s+)?file|فایل.*(بساز|ایجاد|ذخیره|ویرایش|تغییر)|بساز|ایجاد کن|ذخیره کن|ویرایش کن|تغییر بده|به.?روزرسانی)/iu.test(normalized);
   const commandRequested = /(\brun\b|\bbuild\b|\btest\b|\binstall\b|\bnpm\b|\bnpx\b|\bpnpm\b|\byarn\b|\bgit\b|\bpython\b|اجرا کن|بیلد|تست کن|نصب کن|کامپایل)/iu.test(normalized);
   const verifyRequested = /(verify|confirm|read it back|check it|دوباره.*بخوان|تأیید کن|چک کن|بررسی.*فایل)/iu.test(normalized);
@@ -158,8 +174,19 @@ function taskRequirements(task: string, observations: AgentObservation[]) {
   if (commandRequested && commandIndex < 0) missing.push('run_command must successfully execute the requested command');
   if (verifyRequested && writeIndex >= 0 && readIndex <= writeIndex) missing.push('read_file must verify the written file after write_file');
 
+  let requiredTool: ToolName | undefined;
+  if (!denied) {
+    if (writeRequested && writeIndex < 0 && (createRequested || observations.length > 0)) {
+      requiredTool = 'write_file';
+    } else if (commandRequested && commandIndex < 0 && (!writeRequested || writeIndex >= 0)) {
+      requiredTool = 'run_command';
+    } else if (verifyRequested && writeIndex >= 0 && readIndex <= writeIndex) {
+      requiredTool = 'read_file';
+    }
+  }
+
   const requireTool = !denied && (observations.length === 0 || missing.length > 0);
-  return { requireTool, missing };
+  return { requireTool, requiredTool, missing };
 }
 
 async function runPlannerWithFallback(
@@ -167,18 +194,25 @@ async function runPlannerWithFallback(
   input: Record<string, unknown>,
   requestId: string,
   requireTool: boolean,
+  requiredTool?: ToolName,
 ): Promise<PlannerResult> {
   let lastError: unknown;
 
   for (const model of AGENT_MODELS) {
     try {
       const result = await env.AI.run(model, input as any);
-      if (requireTool && !extractToolCall(result)) {
+      const tool = extractToolCall(result);
+      if (requireTool && !tool) {
         lastError = new Error('Model returned text while a real tool call was required.');
         console.warn(JSON.stringify({ event: 'codex_required_tool_missing', requestId, model }));
         continue;
       }
-      console.log(JSON.stringify({ event: 'codex_model_success', requestId, model }));
+      if (requiredTool && tool?.name !== requiredTool) {
+        lastError = new Error(`Model returned ${tool?.name ?? 'no tool'} while ${requiredTool} was required.`);
+        console.warn(JSON.stringify({ event: 'codex_wrong_tool', requestId, model, requiredTool, received: tool?.name ?? null }));
+        continue;
+      }
+      console.log(JSON.stringify({ event: 'codex_model_success', requestId, model, tool: tool?.name ?? null }));
       return { result, model };
     } catch (error) {
       lastError = error;
@@ -232,8 +266,9 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
       'You are FarsiAI Codex, a careful coding and computer-work agent.',
       'Plan exactly one next step at a time and call exactly one available tool when a tool is needed.',
       'The desktop app executes tools locally and sends observations back to you. Never claim a local action succeeded until a tool observation confirms it.',
-      'All file paths must be relative to the approved workspace. Never use absolute paths, parent traversal, home folders, secrets, credentials, or paths outside the workspace.',
-      'Inspect before modifying. Prefer list_directory and read_file before write_file when inspection is useful.',
+      'All file paths must be relative to the approved workspace. Never include the literal prefixes approved-workspace or workspace in a tool path.',
+      'Never use absolute paths, parent traversal, home folders, secrets, credentials, or paths outside the workspace.',
+      'Inspect before modifying only when inspection is actually useful. For a direct request to create a new file with known content, call write_file immediately.',
       'When the user asks to create or change a file, you MUST use write_file. A textual answer is not completion.',
       'When the user asks to run, test, install, build, inspect git, or execute a development command, you MUST use run_command.',
       'If the request asks you to verify a file after writing it, use read_file after the successful write_file observation.',
@@ -243,6 +278,10 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
       'Only return a final answer when every required real-world action is confirmed by tool observations.',
       'When complete, return a concise Persian final response describing exactly what was completed and any remaining user action.',
     ].join('\n');
+
+    const availableTools = requirements.requiredTool
+      ? tools.filter((tool) => tool.name === requirements.requiredTool)
+      : tools;
 
     const plannerInput = {
       messages: [
@@ -254,10 +293,11 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
             workspace,
             observations,
             requiredActionsStillMissing: requirements.missing,
+            requiredToolNow: requirements.requiredTool ?? null,
           }),
         },
       ],
-      tools,
+      tools: availableTools,
       tool_choice: requirements.requireTool ? 'required' : 'auto',
       parallel_tool_calls: false,
       temperature: 0.1,
@@ -269,6 +309,7 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
       plannerInput,
       requestId,
       requirements.requireTool,
+      requirements.requiredTool,
     );
     const tool = extractToolCall(result);
     if (tool) return json(env, { ok: true, type: 'tool', tool, model });
