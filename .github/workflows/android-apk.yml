@@ -1,0 +1,71 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main, "agent/**"]
+    paths:
+      - "apps/mobile/**"
+      - "apps/api/src/**"
+      - "package.json"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "apps/api/src/**"
+      - "package.json"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_API_URL: https://farsiai-api.sorniamir2005.workers.dev
+      EXPO_PUBLIC_SUPABASE_URL: https://amjeqpkdowiqpnbdnlov.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dmq29e97vQpib77ne8wVWA_DHuzJ9-U
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck mobile
+        run: npm run check:mobile
+
+      - name: Verify Expo configuration
+        working-directory: apps/mobile
+        run: npx expo config --type public
+
+      - name: Generate Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Verify APK
+        run: |
+          test -f apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          ls -lh apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarsiAI-Mobile-Android-v0.4.6
+          if-no-files-found: error
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
