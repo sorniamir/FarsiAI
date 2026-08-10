@@ -1,0 +1,32 @@
+.workspace-main > .field-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.agent-task-card .field-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 8px;
+}
+
+.agent-task-card .field-row .primary {
+  min-width: 0;
+}
+
+.activity-inspector > .feature-card {
+  min-height: 58px;
+  margin-bottom: 7px;
+}
+
+.activity-inspector > .feature-card strong {
+  color: #d9e8e2;
+}
+
+.activity-inspector > .feature-card.ready {
+  box-shadow: inset 0 0 0 1px rgba(0,255,174,.025);
+}
+
+@media (max-width: 760px) {
+  .workspace-main > .field-row,
+  .agent-task-card .field-row {
+    grid-template-columns: 1fr;
+  }
+}
