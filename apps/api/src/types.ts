@@ -16,7 +16,7 @@ export type AiMarkdownResult = {
 
 export type AiBinding = {
   run(model: string, input: Record<string, unknown>): Promise<any>;
-  toMarkdown(
+  toMarkdown?(
     input: AiMarkdownDocument | AiMarkdownDocument[],
     options?: Record<string, unknown>,
   ): Promise<AiMarkdownResult | AiMarkdownResult[]>;
