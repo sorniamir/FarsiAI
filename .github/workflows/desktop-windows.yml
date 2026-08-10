@@ -20,6 +20,10 @@ jobs:
   build-windows:
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      VITE_API_URL: https://farsiai-api.sorniamir2005.workers.dev
+      VITE_SUPABASE_URL: https://amjeqpkdowiqpnbdnlov.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dmq29e97vQpib77ne8wVWA_DHuzJ9-U
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,10 +46,6 @@ jobs:
         run: npm --workspace apps/desktop run tauri:icon
 
       - name: Build Windows installer
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm --workspace apps/desktop run tauri:build
 
       - name: Upload EXE installer
