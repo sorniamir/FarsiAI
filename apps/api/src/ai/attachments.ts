@@ -99,9 +99,11 @@ export async function attachmentContext(env: Env, attachments: AiAttachment[]): 
   const documents = attachments.map((attachment) => {
     const parsed = parseDataUrl(attachment.dataUrl);
     if (!parsed) throw new Error('ATTACHMENT_INVALID_DATA');
+    const buffer = new ArrayBuffer(parsed.bytes.byteLength);
+    new Uint8Array(buffer).set(parsed.bytes);
     return {
       name: attachment.name,
-      blob: new Blob([parsed.bytes], { type: attachment.mimeType }),
+      blob: new Blob([buffer], { type: attachment.mimeType }),
     };
   });
 
