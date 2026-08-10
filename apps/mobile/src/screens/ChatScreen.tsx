@@ -1,9 +1,14 @@
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,13 +20,47 @@ import { getConversationMessages } from '../services/history';
 import { consumeGuestQuota } from '../services/quota';
 import { useAppTheme } from '../ThemeProvider';
 import type { AppTheme } from '../theme';
-import type { AppMode, DailyQuota, UiMessage } from '../types';
+import type { AppMode, DailyQuota, UiAttachment, UiMessage } from '../types';
 
 const STARTERS = [
   'برای امروز یک برنامه مفید و واقع‌بینانه بساز',
   'یک متن حرفه‌ای برای معرفی کسب‌وکار من بنویس',
   'یک ایده خلاقانه برای تصویر آینده تهران پیشنهاد بده',
 ];
+
+const MAX_ATTACHMENTS = 4;
+const MAX_ATTACHMENT_BYTES = 6 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 12 * 1024 * 1024;
+const SUPPORTED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/xml',
+  'image/bmp',
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/svg+xml',
+  'image/webp',
+  'text/csv',
+  'text/html',
+  'text/plain',
+]);
+
+function attachmentId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function cleanFileName(value?: string | null): string {
+  return (value || 'file').replace(/[\\/\u0000-\u001f]+/g, '_').slice(0, 180);
+}
+
+function totalAttachmentSize(items: UiAttachment[]): number {
+  return items.reduce((sum, item) => sum + item.size, 0);
+}
 
 export function ChatScreen({
   mode,
@@ -45,20 +84,140 @@ export function ChatScreen({
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId);
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<UiAttachment[]>([]);
+  const [replyTarget, setReplyTarget] = useState<UiMessage | null>(null);
   const [loading, setLoading] = useState(false);
   const listRef = useRef<FlatList<UiMessage>>(null);
 
   useEffect(() => {
     if (!initialConversationId) return;
     setConversationId(initialConversationId);
+    setReplyTarget(null);
+    setAttachments([]);
     getConversationMessages(initialConversationId).then((rows) => {
       setMessages(rows.map((item) => ({ id: item.id, role: item.role, text: item.content, image: item.imageUrl })));
     });
   }, [initialConversationId]);
 
+  useEffect(() => {
+    if (mode !== 'image' && replyTarget) setReplyTarget(null);
+  }, [mode, replyTarget]);
+
+  function addAttachment(next: UiAttachment) {
+    setAttachments((current) => {
+      if (current.length >= MAX_ATTACHMENTS) {
+        Alert.alert('تعداد فایل زیاد است', 'حداکثر ۴ فایل را می‌توان هم‌زمان ارسال کرد.');
+        return current;
+      }
+      if (next.size > MAX_ATTACHMENT_BYTES) {
+        Alert.alert('فایل بزرگ است', 'حجم هر فایل باید حداکثر ۶ مگابایت باشد.');
+        return current;
+      }
+      if (totalAttachmentSize(current) + next.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+        Alert.alert('حجم فایل‌ها زیاد است', 'مجموع حجم فایل‌های ضمیمه باید حداکثر ۱۲ مگابایت باشد.');
+        return current;
+      }
+      if (next.mimeType.startsWith('image/') && mode === 'image') setReplyTarget(null);
+      return [...current, next];
+    });
+  }
+
+  async function pickImage() {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('دسترسی لازم است', 'برای انتخاب تصویر، دسترسی گالری را برای FarsiAI فعال کنید.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        base64: true,
+        quality: 0.9,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      const base64 = asset.base64 || await new File(asset.uri).base64();
+      const size = asset.fileSize ?? Math.floor((base64.length * 3) / 4);
+      addAttachment({
+        id: attachmentId(),
+        name: cleanFileName(asset.fileName || `image-${Date.now()}.jpg`),
+        mimeType: 'image/jpeg',
+        size,
+        dataUrl: `data:image/jpeg;base64,${base64}`,
+        previewUri: asset.uri,
+      });
+    } catch (error) {
+      Alert.alert('انتخاب تصویر ناموفق بود', error instanceof Error ? error.message : 'دوباره تلاش کنید.');
+    }
+  }
+
+  async function pickFiles() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+
+      for (const asset of result.assets.slice(0, MAX_ATTACHMENTS)) {
+        const mimeType = (asset.mimeType || 'application/octet-stream').toLowerCase();
+        if (!SUPPORTED_MIME_TYPES.has(mimeType)) {
+          Alert.alert('فرمت پشتیبانی نمی‌شود', `فایل «${cleanFileName(asset.name)}» فعلاً قابل پردازش نیست.`);
+          continue;
+        }
+        const size = Number(asset.size || 0);
+        if (size > MAX_ATTACHMENT_BYTES) {
+          Alert.alert('فایل بزرگ است', `فایل «${cleanFileName(asset.name)}» بیشتر از ۶ مگابایت است.`);
+          continue;
+        }
+        const base64 = await new File(asset.uri).base64();
+        const effectiveSize = size || Math.floor((base64.length * 3) / 4);
+        addAttachment({
+          id: attachmentId(),
+          name: cleanFileName(asset.name),
+          mimeType,
+          size: effectiveSize,
+          dataUrl: `data:${mimeType};base64,${base64}`,
+          previewUri: mimeType.startsWith('image/') ? asset.uri : undefined,
+        });
+      }
+    } catch (error) {
+      Alert.alert('انتخاب فایل ناموفق بود', error instanceof Error ? error.message : 'دوباره تلاش کنید.');
+    }
+  }
+
+  function openAttachmentMenu() {
+    if (loading) return;
+    Alert.alert('افزودن به پیام', 'چه چیزی می‌خواهید اضافه کنید؟', [
+      { text: 'تصویر از گالری', onPress: () => void pickImage() },
+      { text: 'فایل', onPress: () => void pickFiles() },
+      { text: 'لغو', style: 'cancel' },
+    ]);
+  }
+
+  function replyToImage(item: UiMessage) {
+    if (!item.image) return;
+    setReplyTarget(item);
+    setAttachments((current) => current.filter((attachment) => !attachment.mimeType.startsWith('image/')));
+    if (mode !== 'image') onModeChange('image');
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((item) => item.id !== id));
+  }
+
   async function submit(prefill?: string) {
-    const message = (prefill ?? input).trim();
+    const typedMessage = (prefill ?? input).trim();
+    const fallbackMessage = mode === 'chat' && attachments.length > 0
+      ? 'فایل‌های ضمیمه‌شده را بررسی کن و نکات مهم را توضیح بده.'
+      : '';
+    const message = typedMessage || fallbackMessage;
     if (!message || loading) return;
+
     const remaining = mode === 'chat' ? quota.chatRemaining : quota.imageRemaining;
     if (remaining <= 0) {
       setMessages((current) => [...current, {
@@ -79,13 +238,27 @@ export function ChatScreen({
       return;
     }
 
-    const userMessage: UiMessage = { id: `${Date.now()}-u`, role: 'user', text: message };
+    const requestAttachments = attachments;
+    const requestReply = replyTarget;
+    const attachedImage = requestAttachments.find((item) => item.mimeType.startsWith('image/'));
+    const imageAction: 'generate' | 'edit' = mode === 'image' && (requestReply?.image || attachedImage)
+      ? 'edit'
+      : 'generate';
+
+    const userMessage: UiMessage = {
+      id: `${Date.now()}-u`,
+      role: 'user',
+      text: typedMessage || undefined,
+      attachments: requestAttachments,
+      replyToId: requestReply?.id,
+    };
     setMessages((current) => [...current, userMessage]);
     setInput('');
+    setAttachments([]);
+    setReplyTarget(null);
     setLoading(true);
 
     try {
-      const previousImage = [...messages].reverse().find((item) => item.role === 'assistant' && item.image);
       const result = await sendAiRequest({
         mode,
         message,
@@ -94,8 +267,11 @@ export function ChatScreen({
           .filter((item) => item.text)
           .slice(-10)
           .map((item) => ({ role: item.role, content: item.text! })),
-        referenceImage: mode === 'image' ? previousImage?.image : undefined,
-        referencePrompt: mode === 'image' ? previousImage?.revisedPrompt : undefined,
+        attachments: requestAttachments,
+        imageAction: mode === 'image' ? imageAction : undefined,
+        referenceImage: mode === 'image' && imageAction === 'edit' ? requestReply?.image : undefined,
+        referencePrompt: mode === 'image' && imageAction === 'edit' ? requestReply?.revisedPrompt : undefined,
+        replyToMessageId: requestReply?.id,
       });
 
       if (result.ok) {
@@ -104,18 +280,18 @@ export function ChatScreen({
           const guestQuota = consumeGuestQuota(mode);
           if (guestQuota) onQuotaChange(guestQuota);
         }
-        if (result.conversationId) {
-          setConversationId(result.conversationId);
-        }
+        if (result.conversationId) setConversationId(result.conversationId);
       }
 
       const assistant: UiMessage = !result.ok
         ? { id: `${Date.now()}-e`, role: 'assistant', text: result.error }
         : result.mode === 'image'
           ? {
-              id: `${Date.now()}-i`, role: 'assistant', image: result.image,
+              id: `${Date.now()}-i`,
+              role: 'assistant',
+              image: result.image,
               revisedPrompt: result.revisedPrompt,
-              text: result.edited ? 'ویرایش تصویر آماده شد ✦' : 'تصویر آماده شد ✦',
+              text: result.edited ? 'ویرایش تصویر آماده شد ✦' : 'تصویر جدید آماده شد ✦',
             }
           : { id: `${Date.now()}-a`, role: 'assistant', text: result.text };
 
@@ -131,6 +307,8 @@ export function ChatScreen({
     }
   }
 
+  const canSend = !loading && (input.trim().length > 0 || (mode === 'chat' && attachments.length > 0));
+
   return (
     <View style={styles.wrap}>
       <FlatList
@@ -138,7 +316,7 @@ export function ChatScreen({
         data={messages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={messages.length ? styles.list : styles.emptyList}
-        renderItem={({ item }) => <MessageBubble item={item} />}
+        renderItem={({ item }) => <MessageBubble item={item} onReplyImage={item.role === 'assistant' && item.image ? replyToImage : undefined} />}
         ListEmptyComponent={<EmptyState mode={mode} onSelect={submit} />}
         ListFooterComponent={loading ? <Typing mode={mode} /> : null}
         keyboardShouldPersistTaps="handled"
@@ -146,30 +324,58 @@ export function ChatScreen({
       />
 
       <View style={styles.composerWrap}>
-        {mode === 'image' ? (
-          <View style={styles.modeHint}>
-            <Text style={styles.modeHintText}>▧ ساخت تصویر روشن است</Text>
-            <Pressable onPress={() => onModeChange('chat')}><Text style={styles.close}>×</Text></Pressable>
+        {replyTarget?.image ? (
+          <View style={styles.replyBar}>
+            <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Text style={styles.close}>×</Text></Pressable>
+            <View style={styles.replyTextWrap}>
+              <Text style={styles.replyTitle}>ویرایش همین تصویر</Text>
+              <Text style={styles.replyText}>درخواست بعدی فقط روی این تصویر اعمال می‌شود.</Text>
+            </View>
+            <Image source={{ uri: replyTarget.image }} style={styles.replyImage} />
           </View>
         ) : null}
+
+        {attachments.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.attachmentStrip}>
+            {attachments.map((attachment) => (
+              <View key={attachment.id} style={styles.pendingAttachment}>
+                {attachment.mimeType.startsWith('image/') ? (
+                  <Image source={{ uri: attachment.previewUri || attachment.dataUrl }} style={styles.pendingImage} />
+                ) : (
+                  <View style={styles.pendingFile}><Text style={styles.pendingFileText}>FILE</Text></View>
+                )}
+                <Text numberOfLines={1} style={styles.pendingName}>{attachment.name}</Text>
+                <Pressable onPress={() => removeAttachment(attachment.id)} style={styles.pendingRemove}><Text style={styles.pendingRemoveText}>×</Text></Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {mode === 'image' ? (
+          <View style={styles.modeHint}>
+            <Text style={styles.modeHintText}>{replyTarget || attachments.some((item) => item.mimeType.startsWith('image/')) ? '▧ ویرایش تصویر روشن است' : '▧ ساخت تصویر جدید روشن است'}</Text>
+            <Pressable onPress={() => { setReplyTarget(null); onModeChange('chat'); }}><Text style={styles.close}>×</Text></Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.composer}>
-          <Pressable style={styles.plus} onPress={() => onModeChange(mode === 'chat' ? 'image' : 'chat')}>
-            <Text style={styles.plusText}>{mode === 'image' ? '▧' : '+'}</Text>
+          <Pressable style={styles.plus} onPress={openAttachmentMenu} disabled={loading}>
+            <Text style={styles.plusText}>＋</Text>
           </Pressable>
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder={mode === 'image' ? 'تصویری که می‌خواهی را توصیف کن…' : 'هر چیزی می‌خواهی بپرس…'}
+            placeholder={mode === 'image' ? 'تصویری که می‌خواهی را توصیف کن…' : 'پیام بنویس یا فایل اضافه کن…'}
             placeholderTextColor={theme.colors.textDim}
             style={styles.input}
             multiline
             textAlign="right"
           />
-          <Pressable style={[styles.send, (!input.trim() || loading) && styles.disabled]} disabled={!input.trim() || loading} onPress={() => submit()}>
+          <Pressable style={[styles.send, !canSend && styles.disabled]} disabled={!canSend} onPress={() => submit()}>
             {loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendText}>↑</Text>}
           </Pressable>
         </View>
-        <Text style={styles.disclaimer}>پاسخ‌های هوش مصنوعی ممکن است نیاز به بررسی داشته باشند.</Text>
+        <Text style={styles.disclaimer}>ویرایش تصویر فقط با ریپلای یا ضمیمه‌کردن تصویر انجام می‌شود.</Text>
       </View>
     </View>
   );
@@ -182,7 +388,7 @@ function EmptyState({ mode, onSelect }: { mode: 'chat' | 'image'; onSelect: (val
     <View style={styles.empty}>
       <View style={styles.heroOrb}><Text style={styles.heroOrbText}>{mode === 'image' ? '▧' : '✦'}</Text></View>
       <Text style={styles.heroTitle}>{mode === 'image' ? 'ایده‌ات را به تصویر تبدیل کن' : 'چطور می‌تونم کمکت کنم؟'}</Text>
-      <Text style={styles.heroBody}>{mode === 'image' ? 'صحنه، سبک و جزئیات مورد نظرت را فارسی بنویس.' : 'سؤال، ایده یا کاری که می‌خواهی انجام شود را فارسی بنویس.'}</Text>
+      <Text style={styles.heroBody}>{mode === 'image' ? 'صحنه، سبک و جزئیات موردنظرت را فارسی بنویس.' : 'سؤال، ایده یا فایل موردنظرت را ارسال کن.'}</Text>
       <View style={styles.starters}>
         {STARTERS.map((item) => (
           <Pressable key={item} style={styles.starter} onPress={() => onSelect(item)}>
@@ -200,7 +406,7 @@ function Typing({ mode }: { mode: 'chat' | 'image' }) {
   return (
     <View style={styles.typing}>
       <ActivityIndicator size="small" color={theme.colors.primaryBright} />
-      <Text style={styles.typingText}>{mode === 'image' ? 'در حال ساخت تصویر…' : 'در حال فکر کردن…'}</Text>
+      <Text style={styles.typingText}>{mode === 'image' ? 'در حال پردازش تصویر…' : 'در حال فکر کردن…'}</Text>
     </View>
   );
 }
@@ -221,6 +427,20 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   typing: { marginHorizontal: 14, marginBottom: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   typingText: { color: theme.colors.textMuted, fontSize: 12 },
   composerWrap: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, backgroundColor: theme.colors.background },
+  replyBar: { marginBottom: 8, minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 8, borderRadius: 15, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.surfaceRaised },
+  replyClose: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surfaceSoft },
+  replyImage: { width: 46, height: 46, borderRadius: 10, backgroundColor: theme.colors.surfaceSoft },
+  replyTextWrap: { flex: 1 },
+  replyTitle: { color: theme.colors.primaryBright, fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  replyText: { color: theme.colors.textMuted, fontSize: 10, marginTop: 3, textAlign: 'right' },
+  attachmentStrip: { flexDirection: 'row-reverse', gap: 8, paddingBottom: 8 },
+  pendingAttachment: { width: 112, minHeight: 72, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised, padding: 7, position: 'relative' },
+  pendingImage: { width: '100%', height: 58, borderRadius: 9, backgroundColor: theme.colors.surfaceSoft },
+  pendingFile: { height: 58, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft },
+  pendingFileText: { color: theme.colors.primaryBright, fontSize: 10, fontWeight: '900' },
+  pendingName: { color: theme.colors.textMuted, fontSize: 9, marginTop: 5, textAlign: 'center' },
+  pendingRemove: { position: 'absolute', top: 3, right: 3, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)' },
+  pendingRemoveText: { color: '#fff', fontSize: 15, lineHeight: 17 },
   modeHint: { alignSelf: 'flex-end', marginBottom: 7, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: theme.colors.accentSoft },
   modeHintText: { color: theme.colors.primaryBright, fontSize: 11, fontWeight: '700' },
   close: { color: theme.colors.textMuted, fontSize: 17 },
