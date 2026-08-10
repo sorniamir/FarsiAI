@@ -1,6 +1,7 @@
 use crate::AppState;
 use serde::Serialize;
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -51,19 +52,54 @@ fn validate_relative_components(relative: &Path) -> Result<(), String> {
 
 fn canonical_for_write(path: &str, allowed: &HashSet<PathBuf>) -> Result<PathBuf, String> {
     let candidate = PathBuf::from(path);
+    if !candidate.is_absolute() {
+        return Err("File path must be absolute and inside the approved workspace.".to_string());
+    }
+    if candidate.components().any(|component| matches!(component, Component::ParentDir)) {
+        return Err("Access denied. Invalid path outside workspace.".to_string());
+    }
+
     if candidate.exists() {
         let canonical = fs::canonicalize(candidate).map_err(|error| error.to_string())?;
         workspace_root_from_allowed(allowed, &canonical)?;
         return Ok(canonical);
     }
 
-    let root = workspace_root_from_allowed(allowed, &candidate)?;
-    let relative = candidate
+    // Windows commonly canonicalizes an approved folder to an extended path such as
+    // \\?\C:\Users\... while the native folder picker returns C:\Users\....
+    // Comparing the raw non-existing target to the canonical allowlist therefore fails.
+    // Instead, walk up to the nearest existing ancestor, canonicalize that ancestor,
+    // verify it is inside an approved workspace, then safely rebuild the missing suffix.
+    let mut cursor = candidate.as_path();
+    let mut missing_components: Vec<OsString> = Vec::new();
+    while !cursor.exists() {
+        let name = cursor
+            .file_name()
+            .ok_or_else(|| "File path must resolve inside an existing approved workspace.".to_string())?;
+        missing_components.push(name.to_os_string());
+        cursor = cursor
+            .parent()
+            .ok_or_else(|| "File path must resolve inside an existing approved workspace.".to_string())?;
+    }
+
+    if !cursor.is_dir() {
+        return Err("The nearest existing workspace ancestor is not a directory.".to_string());
+    }
+
+    let canonical_ancestor = fs::canonicalize(cursor).map_err(|error| error.to_string())?;
+    let root = workspace_root_from_allowed(allowed, &canonical_ancestor)?;
+
+    let mut target = canonical_ancestor;
+    for component in missing_components.iter().rev() {
+        target.push(component);
+    }
+
+    let relative = target
         .strip_prefix(&root)
         .map_err(|_| "Access denied. Invalid workspace path.".to_string())?;
     validate_relative_components(relative)?;
 
-    let parent = candidate
+    let parent = target
         .parent()
         .ok_or_else(|| "File path must have a parent directory".to_string())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -71,7 +107,7 @@ fn canonical_for_write(path: &str, allowed: &HashSet<PathBuf>) -> Result<PathBuf
     let canonical_parent = fs::canonicalize(parent).map_err(|error| error.to_string())?;
     workspace_root_from_allowed(allowed, &canonical_parent)?;
 
-    let file_name = candidate
+    let file_name = target
         .file_name()
         .ok_or_else(|| "Invalid file name".to_string())?;
     Ok(canonical_parent.join(file_name))
@@ -259,6 +295,18 @@ mod tests {
         fs::canonicalize(directory).expect("canonical temp workspace")
     }
 
+    #[cfg(target_os = "windows")]
+    fn windows_user_visible_path(path: &Path) -> PathBuf {
+        let value = path.to_string_lossy();
+        if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{}", rest));
+        }
+        if let Some(rest) = value.strip_prefix(r"\\?\") {
+            return PathBuf::from(rest);
+        }
+        path.to_path_buf()
+    }
+
     #[test]
     fn codex_local_write_creates_real_file_with_expected_content() {
         let root = temporary_workspace("write-smoke");
@@ -278,6 +326,31 @@ mod tests {
         assert_eq!(
             fs::read_to_string(&target).expect("read written file"),
             "سلام من FarsiAI هستم"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn codex_windows_write_accepts_folder_picker_style_path_against_canonical_allowlist() {
+        let root = temporary_workspace("windows-path-contract");
+        let picker_root = windows_user_visible_path(&root);
+        let target = picker_root.join("test.txt");
+        let canonical_target = root.join("test.txt");
+        let mut allowed = HashSet::new();
+        allowed.insert(root.clone());
+
+        write_text_file_impl(
+            target.to_str().expect("utf8 picker path"),
+            "FarsiAI Codex Test",
+            &allowed,
+        )
+        .expect("write from folder-picker style path must succeed");
+
+        assert!(canonical_target.is_file(), "the real file must exist inside the approved canonical workspace");
+        assert_eq!(
+            fs::read_to_string(&canonical_target).expect("read Windows-written file"),
+            "FarsiAI Codex Test"
         );
         fs::remove_dir_all(root).expect("cleanup");
     }

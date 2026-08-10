@@ -53,8 +53,8 @@ jobs:
       - name: Build desktop frontend for Tauri tests
         run: npm --workspace apps/desktop run build
 
-      - name: Test Codex local file operations on Windows
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml codex_local_write -- --nocapture
+      - name: Test all Codex local operations on Windows
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- --nocapture
 
       - name: Build Windows installer
         run: npm run desktop:build

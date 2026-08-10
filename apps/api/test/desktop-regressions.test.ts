@@ -46,7 +46,7 @@ function installAuthenticatedUserFetch() {
   });
 }
 
-describe('Desktop v0.4.4 regressions', () => {
+describe('Desktop v0.4.5 regressions', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     mock.restoreAll();
@@ -286,6 +286,33 @@ describe('Desktop v0.4.4 regressions', () => {
     assert.equal(payload.ok, true);
     assert.equal(payload.type, 'final');
     assert.equal(payload.model, 'local-confirmation');
+    assert.equal(aiRun.mock.callCount(), 0);
+  });
+
+  it('stops after a local write failure instead of requesting approval for the same write again', async () => {
+    const aiRun = mock.fn(async () => {
+      throw new Error('planner must not be called after a local side-effect failure');
+    });
+    const env = createEnv({ AI: { run: aiRun } });
+
+    const response = await worker.fetch(
+      agentRequest({
+        task: 'یک فایل test.txt بساز و داخلش بنویس FarsiAI Codex Test',
+        workspace: 'approved-workspace',
+        observations: [{
+          role: 'tool',
+          name: 'write_file',
+          content: 'ERROR: Access denied. Approve the workspace directory first.',
+        }],
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 409);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, false);
+    assert.equal(payload.code, 'CODEX_LOCAL_TOOL_FAILED');
+    assert.match(payload.error, /جلوگیری از تکرار مجوز/);
     assert.equal(aiRun.mock.callCount(), 0);
   });
 
