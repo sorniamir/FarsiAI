@@ -1,5 +1,5 @@
 import { supabase } from './lib/supabase';
-import type { DailyQuota } from './types';
+import type { DailyQuota, UiAttachment } from './types';
 
 export type AiMode = 'chat' | 'image';
 
@@ -16,6 +16,7 @@ export type AiResponse =
       image: string;
       revisedPrompt?: string;
       edited?: boolean;
+      provider?: string;
       quota?: DailyQuota;
       conversationId?: string;
     }
@@ -28,8 +29,11 @@ export async function sendAiRequest(input: {
   message: string;
   history: ApiMessage[];
   conversationId?: string;
+  attachments?: UiAttachment[];
+  imageAction?: 'generate' | 'edit';
   referenceImage?: string;
   referencePrompt?: string;
+  replyToMessageId?: string;
 }): Promise<AiResponse> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
 
@@ -39,10 +43,15 @@ export async function sendAiRequest(input: {
     if (token) headers.authorization = `Bearer ${token}`;
   }
 
+  const payload = {
+    ...input,
+    attachments: input.attachments?.map(({ name, mimeType, size, dataUrl }) => ({ name, mimeType, size, dataUrl })),
+  };
+
   const response = await fetch(`${API_URL}/v1/ai`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(input),
+    body: JSON.stringify(payload),
   });
 
   let data: AiResponse;
