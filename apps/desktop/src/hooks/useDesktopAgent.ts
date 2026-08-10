@@ -61,8 +61,12 @@ export function useDesktopAgent() {
     `در حال ذخیره فایل: ${path}`,
     async () => {
       const backupPath = await invoke<string>('write_text_file', { path, content });
+      const verifiedContent = await invoke<string>('read_text_file', { path });
+      if (verifiedContent !== content) {
+        throw new Error(`Write verification failed for ${path}: file content on disk did not match the requested content.`);
+      }
       if (backupPath) pushLog(`Backup ساخته شد: ${backupPath}`);
-      pushLog(`فایل ذخیره شد: ${path}`);
+      pushLog(`✓ فایل روی دیسک ذخیره و تأیید شد: ${path}`);
       return backupPath;
     },
   ), [pushLog, runBusy]);
