@@ -5,8 +5,6 @@ export type AccountSnapshot = {
   email?: string;
   displayName?: string;
   plan: 'free' | 'pro' | 'admin';
-  /** Legacy field kept only so the old non-entrypoint App.tsx can still typecheck. */
-  credits?: number | null;
 };
 
 export type ConversationSummary = {
