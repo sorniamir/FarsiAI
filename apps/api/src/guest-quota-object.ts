@@ -1,3 +1,6 @@
+import { DurableObject } from 'cloudflare:workers';
+import type { Env } from './types';
+
 type GuestMode = 'chat' | 'image';
 
 type GuestQuotaState = {
@@ -5,13 +8,6 @@ type GuestQuotaState = {
   chatUsed: number;
   imageUsed: number;
   events: Record<string, { mode: GuestMode; refunded: boolean }>;
-};
-
-type DurableStateLike = {
-  storage: {
-    get<T>(key: string): Promise<T | undefined>;
-    put<T>(key: string, value: T): Promise<void>;
-  };
 };
 
 function utcDay(): string {
@@ -35,26 +31,26 @@ function quota(state: GuestQuotaState) {
   };
 }
 
-export class GuestQuotaDurableObject {
-  private readonly state: DurableStateLike;
-
-  constructor(state: DurableStateLike) {
-    this.state = state;
+export class GuestQuotaDurableObject extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
   }
 
   private async readState(): Promise<GuestQuotaState> {
     const day = utcDay();
-    const stored = await this.state.storage.get<GuestQuotaState>('quota');
+    const stored = await this.ctx.storage.get<GuestQuotaState>('quota');
     if (!stored || stored.day !== day) {
       const next = freshState(day);
-      await this.state.storage.put('quota', next);
+      await this.ctx.storage.put('quota', next);
       return next;
     }
     return stored;
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (request.method !== 'POST') return Response.json({ ok: false, error: 'method_not_allowed' }, { status: 405 });
+    if (request.method !== 'POST') {
+      return Response.json({ ok: false, error: 'method_not_allowed' }, { status: 405 });
+    }
 
     const url = new URL(request.url);
     let payload: Record<string, unknown>;
@@ -65,16 +61,22 @@ export class GuestQuotaDurableObject {
     }
 
     const referenceId = String(payload.referenceId ?? '').trim();
-    if (!referenceId) return Response.json({ ok: false, error: 'reference_required' }, { status: 400 });
+    if (!referenceId) {
+      return Response.json({ ok: false, error: 'reference_required' }, { status: 400 });
+    }
 
     const state = await this.readState();
 
     if (url.pathname === '/spend') {
       const mode = payload.mode === 'image' ? 'image' : payload.mode === 'chat' ? 'chat' : undefined;
-      if (!mode) return Response.json({ ok: false, error: 'invalid_mode' }, { status: 400 });
+      if (!mode) {
+        return Response.json({ ok: false, error: 'invalid_mode' }, { status: 400 });
+      }
 
       const existing = state.events[referenceId];
-      if (existing && !existing.refunded) return Response.json({ ok: true, quota: quota(state) });
+      if (existing && !existing.refunded) {
+        return Response.json({ ok: true, quota: quota(state) });
+      }
 
       if (mode === 'chat' && state.chatUsed >= 5) {
         return Response.json({ ok: false, reason: 'chat_limit', quota: quota(state) }, { status: 402 });
@@ -86,7 +88,7 @@ export class GuestQuotaDurableObject {
       if (mode === 'chat') state.chatUsed += 1;
       else state.imageUsed += 1;
       state.events[referenceId] = { mode, refunded: false };
-      await this.state.storage.put('quota', state);
+      await this.ctx.storage.put('quota', state);
       return Response.json({ ok: true, quota: quota(state) });
     }
 
@@ -96,7 +98,7 @@ export class GuestQuotaDurableObject {
         if (event.mode === 'chat') state.chatUsed = Math.max(0, state.chatUsed - 1);
         else state.imageUsed = Math.max(0, state.imageUsed - 1);
         event.refunded = true;
-        await this.state.storage.put('quota', state);
+        await this.ctx.storage.put('quota', state);
       }
       return Response.json({ ok: true, quota: quota(state) });
     }
