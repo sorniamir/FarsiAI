@@ -1,3 +1,4 @@
+import { handleAgentPlan } from './ai/agent';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
 import { refundDailyQuota, spendDailyQuota } from './lib/credits';
@@ -40,7 +41,11 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.3.4' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.0' });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
+      return handleAgentPlan(request, env);
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/ai') {
@@ -212,4 +217,3 @@ export default {
     }
   },
 };
-

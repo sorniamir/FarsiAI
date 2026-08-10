@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Typecheck API and mobile
+      - name: Typecheck API, mobile, and desktop
         run: npm run check
 
       - name: Test Worker behavior
