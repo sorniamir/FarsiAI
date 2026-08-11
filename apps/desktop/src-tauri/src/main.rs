@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod codex_broker;
+mod codex_transport;
 
 use codex_broker::CodexState;
 use tauri::Manager;
@@ -22,6 +23,7 @@ fn main() {
             codex_broker::codex_launch_application,
             codex_broker::codex_run_command,
             codex_broker::codex_cancel_run,
+            codex_transport::codex_api_turn,
         ])
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {

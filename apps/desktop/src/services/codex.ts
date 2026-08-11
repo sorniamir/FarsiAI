@@ -95,7 +95,6 @@ type DirectoryEntry = {
   size?: number;
 };
 
-const API_URL = import.meta.env.VITE_API_URL?.trim() || 'https://farsiai-api.sorniamir2005.workers.dev';
 const TURN_TIMEOUT_MS = 90_000;
 const MAX_REMOTE_OUTPUT = 120_000;
 const MAX_WRITE_CHARS = 5_000_000;
@@ -295,22 +294,30 @@ async function postTurn(input: {
   token?: string;
   signal: AbortSignal;
 }): Promise<Response> {
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-  };
-  if (input.token) headers.authorization = `Bearer ${input.token}`;
-  return fetch(`${API_URL}/v2/codex/turn`, {
-    method: 'POST',
-    headers,
-    signal: input.signal,
-    body: JSON.stringify({
-      task: input.task,
-      workspace: { boundary: 'approved-workspace', label: input.workspace.label },
-      observations: remoteObservations(input.observations, input.workspace),
-      client: { kind: 'desktop', version: CODEX_CLIENT_VERSION, locale: 'fa-IR' },
-      capabilities: input.capabilities,
-    }),
+  const body = JSON.stringify({
+    task: input.task,
+    workspace: { boundary: 'approved-workspace', label: input.workspace.label },
+    observations: remoteObservations(input.observations, input.workspace),
+    client: { kind: 'desktop', version: CODEX_CLIENT_VERSION, locale: 'fa-IR' },
+    capabilities: input.capabilities,
   });
+  const nativeRequest = invoke<{ status: number; body: string }>('codex_api_turn', {
+    body,
+    token: input.token,
+  });
+  const native = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+    const onAbort = () => reject(input.signal.reason ?? new DOMException('Codex request aborted', 'AbortError'));
+    input.signal.addEventListener('abort', onAbort, { once: true });
+    nativeRequest.then(
+      (value) => { input.signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error) => { input.signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+  return new Response(native.body, {
+    status: native.status,
+    headers: { 'content-type': 'application/json' },
+  });
+
 }
 
 export async function requestCodexTurn(input: {
