@@ -51,11 +51,6 @@ replaceExact(
 
 replaceExact(
   'apps/api/test/desktop-regressions.test.ts',
-  "      assert.equal(model, '@cf/zai-org/glm-5.2');",
-  "      assert.equal(model, '@cf/zai-org/glm-4.7-flash');",
-);
-replaceExact(
-  'apps/api/test/desktop-regressions.test.ts',
   "    assert.equal(payload.model, '@cf/zai-org/glm-5.2');",
   "    assert.equal(payload.model, '@cf/zai-org/glm-4.7-flash');",
 );
@@ -63,7 +58,7 @@ replaceExact(
 replaceRegex(
   'apps/api/test/desktop-regressions.test.ts',
   /  it\('stops after a local write failure instead of requesting approval for the same write again',[\s\S]*?\n  \}\);\n\n  it\('keeps Guest Chat available/,
-  `  it('feeds a local write failure back to Codex so it can diagnose and recover', async () => {\n    installAuthenticatedUserFetch();\n    const aiRun = mock.fn(async (_model: string, input: any) => {\n      assert.match(JSON.stringify(input.messages), /status=\\\\?"failure/);\n      assert.match(JSON.stringify(input.messages), /Access denied/);\n      return {\n        tool_calls: [\n          { name: 'list_directory', arguments: { path: '.' } },\n        ],\n      };\n    });\n    const env = createEnv({\n      AI: { run: aiRun },\n      SUPABASE_URL: 'https://project.supabase.co',\n      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',\n    });\n\n    const response = await worker.fetch(\n      agentRequest({\n        task: 'یک فایل test.txt بساز و داخلش بنویس FarsiAI Codex Test',\n        workspace: 'approved-workspace',\n        observations: [{\n          role: 'tool',\n          name: 'write_file',\n          content: 'ERROR: Access denied. Approve the workspace directory first.',\n        }],\n      }),\n      env,\n    );\n\n    assert.equal(response.status, 200);\n    const payload = await response.json() as any;\n    assert.equal(payload.ok, true);\n    assert.equal(payload.type, 'tool');\n    assert.equal(payload.tool.name, 'list_directory');\n    assert.equal(aiRun.mock.callCount(), 1);\n  });\n\n  it('keeps Guest Chat available`,
+  `  it('feeds a local write failure back to Codex so it can diagnose and recover', async () => {\n    installAuthenticatedUserFetch();\n    const aiRun = mock.fn(async (_model: string, input: any) => {\n      assert.match(JSON.stringify(input.messages), /status=.*failure/);\n      assert.match(JSON.stringify(input.messages), /Access denied/);\n      return {\n        tool_calls: [\n          { name: 'list_directory', arguments: { path: '.' } },\n        ],\n      };\n    });\n    const env = createEnv({\n      AI: { run: aiRun },\n      SUPABASE_URL: 'https://project.supabase.co',\n      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',\n    });\n\n    const response = await worker.fetch(\n      agentRequest({\n        task: 'یک فایل test.txt بساز و داخلش بنویس FarsiAI Codex Test',\n        workspace: 'approved-workspace',\n        observations: [{\n          role: 'tool',\n          name: 'write_file',\n          content: 'ERROR: Access denied. Approve the workspace directory first.',\n        }],\n      }),\n      env,\n    );\n\n    assert.equal(response.status, 200);\n    const payload = await response.json() as any;\n    assert.equal(payload.ok, true);\n    assert.equal(payload.type, 'tool');\n    assert.equal(payload.tool.name, 'list_directory');\n    assert.equal(aiRun.mock.callCount(), 1);\n  });\n\n  it('keeps Guest Chat available`,
 );
 
 console.log('Codex Pro planner/tests finalized.');
