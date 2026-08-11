@@ -1,4 +1,5 @@
 import { handleAgentPlan } from './ai/agent-v2';
+import { handleCodexTurn } from './ai/codex-v2';
 import { attachmentContext, firstImageAttachment, normalizeAttachments } from './ai/attachments';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
@@ -58,27 +59,6 @@ async function guestActorKey(request: Request): Promise<string> {
   return `guest:${hex.slice(0, 32)}`;
 }
 
-async function detectLocalAgentSideEffectFailure(request: Request): Promise<{ tool: 'write_file' | 'run_command'; detail: string } | null> {
-  try {
-    const payload = await request.clone().json() as Record<string, unknown>;
-    const observations = Array.isArray(payload.observations) ? payload.observations : [];
-    const last = observations.length > 0 ? observations[observations.length - 1] : undefined;
-    if (!last || typeof last !== 'object') return null;
-
-    const item = last as Record<string, unknown>;
-    if (item.role !== 'tool' || (item.name !== 'write_file' && item.name !== 'run_command')) return null;
-    const content = String(item.content ?? '').trim();
-    if (!content.toUpperCase().startsWith('ERROR:')) return null;
-
-    return {
-      tool: item.name,
-      detail: sanitizeText(content.replace(/^ERROR:\s*/i, ''), 1200),
-    };
-  } catch {
-    return null;
-  }
-}
-
 type ChargedRequest =
   | { kind: 'user'; userId: string; requestId: string }
   | { kind: 'guest'; actorKey: string; requestId: string };
@@ -101,6 +81,10 @@ export default {
       // Local tool failures are intentionally returned to Codex Pro as observations.
       // The planner can diagnose and recover instead of stopping after the first error.
       return handleAgentPlan(request, env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v2/codex/turn') {
+      return handleCodexTurn(request, env);
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/voice/transcribe') {

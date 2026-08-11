@@ -7,6 +7,7 @@ on:
       - "apps/desktop/**"
       - "apps/api/src/ai/agent.ts"
       - "apps/api/src/ai/agent-v2.ts"
+      - "apps/api/src/ai/codex-v2.ts"
       - "apps/api/src/index.ts"
       - "apps/api/test/**"
       - "package.json"
@@ -17,6 +18,7 @@ on:
       - "apps/desktop/**"
       - "apps/api/src/ai/agent.ts"
       - "apps/api/src/ai/agent-v2.ts"
+      - "apps/api/src/ai/codex-v2.ts"
       - "apps/api/src/index.ts"
       - "apps/api/test/**"
       - "package.json"
@@ -80,15 +82,15 @@ jobs:
           if ($joined -notmatch [regex]::Escape($env:VITE_API_URL)) {
             throw "Production API URL was not embedded into the desktop production bundle."
           }
-          if ($joined -notmatch "0.4.7-codex-pro") {
-            throw "Codex Pro client marker was not embedded into the Windows production bundle."
+          if ($joined -notmatch "farsiai.codex.desktop.v2") {
+            throw "Codex Studio v2 marker was not embedded into the Windows production bundle."
           }
           Write-Host "Verified production API + Supabase + Codex Pro client configuration in desktop bundle."
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: FarsiAI-Desktop-Windows-v0.4.7-Codex-Pro
+          name: FarsiAI-Desktop-Windows-v0.5.0-Codex-Voice
           if-no-files-found: error
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
