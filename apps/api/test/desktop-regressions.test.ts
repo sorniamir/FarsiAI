@@ -222,7 +222,7 @@ describe('Desktop v0.4.5 regressions', () => {
     assert.equal(payload.ok, true);
     assert.equal(payload.type, 'tool');
     assert.equal(payload.tool.name, 'run_command');
-    assert.equal(payload.model, '@cf/zai-org/glm-5.2');
+    assert.equal(payload.model, '@cf/zai-org/glm-4.7-flash');
     assert.equal(aiRun.mock.callCount(), 3);
   });
 
@@ -289,11 +289,22 @@ describe('Desktop v0.4.5 regressions', () => {
     assert.equal(aiRun.mock.callCount(), 0);
   });
 
-  it('stops after a local write failure instead of requesting approval for the same write again', async () => {
-    const aiRun = mock.fn(async () => {
-      throw new Error('planner must not be called after a local side-effect failure');
+  it('feeds a local write failure back to Codex so it can diagnose and recover', async () => {
+    installAuthenticatedUserFetch();
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      assert.match(JSON.stringify(input.messages), /status=.*failure/);
+      assert.match(JSON.stringify(input.messages), /Access denied/);
+      return {
+        tool_calls: [
+          { name: 'list_directory', arguments: { path: '.' } },
+        ],
+      };
     });
-    const env = createEnv({ AI: { run: aiRun } });
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
 
     const response = await worker.fetch(
       agentRequest({
@@ -308,12 +319,12 @@ describe('Desktop v0.4.5 regressions', () => {
       env,
     );
 
-    assert.equal(response.status, 409);
+    assert.equal(response.status, 200);
     const payload = await response.json() as any;
-    assert.equal(payload.ok, false);
-    assert.equal(payload.code, 'CODEX_LOCAL_TOOL_FAILED');
-    assert.match(payload.error, /جلوگیری از تکرار مجوز/);
-    assert.equal(aiRun.mock.callCount(), 0);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.type, 'tool');
+    assert.equal(payload.tool.name, 'list_directory');
+    assert.equal(aiRun.mock.callCount(), 1);
   });
 
   it('keeps Guest Chat available when the production guest quota RPC is missing', async () => {

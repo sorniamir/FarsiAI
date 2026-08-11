@@ -1,4 +1,4 @@
-import { handleAgentPlan } from './ai/agent';
+import { handleAgentPlan } from './ai/agent-v2';
 import { attachmentContext, firstImageAttachment, normalizeAttachments } from './ai/attachments';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
@@ -93,24 +93,12 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.6' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.7' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
-      const localFailure = await detectLocalAgentSideEffectFailure(request);
-      if (localFailure) {
-        const action = localFailure.tool === 'write_file' ? 'نوشتن فایل' : 'اجرای دستور';
-        return json(
-          env,
-          {
-            ok: false,
-            error: `اجرای محلی ${action} ناموفق شد و Agent برای جلوگیری از تکرار مجوز متوقف شد.${localFailure.detail ? ` جزئیات: ${localFailure.detail}` : ''}`,
-            code: 'CODEX_LOCAL_TOOL_FAILED',
-            requestId,
-          },
-          409,
-        );
-      }
+      // Local tool failures are intentionally returned to Codex Pro as observations.
+      // The planner can diagnose and recover instead of stopping after the first error.
       return handleAgentPlan(request, env);
     }
 

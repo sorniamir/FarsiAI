@@ -181,11 +181,24 @@ fn normalize_program(command: &str) -> String {
 fn platform_program(normalized: &str) -> String {
     #[cfg(target_os = "windows")]
     {
-        if matches!(normalized, "npm" | "npx" | "pnpm" | "yarn") {
+        if matches!(normalized, "npm" | "npx" | "pnpm" | "yarn" | "mvn") {
             return format!("{normalized}.cmd");
+        }
+        if normalized == "gradle" {
+            return "gradle.bat".to_string();
         }
     }
     normalized.to_string()
+}
+
+fn bounded_output(bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes).to_string();
+    const MAX_CHARS: usize = 250_000;
+    if text.chars().count() <= MAX_CHARS {
+        return text;
+    }
+    let clipped: String = text.chars().take(MAX_CHARS).collect();
+    format!("{clipped}\n...[output truncated by FarsiAI Codex]")
 }
 
 #[tauri::command]
@@ -250,7 +263,7 @@ pub fn run_command(
     cwd: String,
     state: State<AppState>,
 ) -> Result<CommandResult, String> {
-    const ALLOWED_PROGRAMS: &[&str] = &["npm", "node", "git", "python", "python3", "pnpm", "yarn", "npx"];
+    const ALLOWED_PROGRAMS: &[&str] = &["npm", "node", "git", "python", "python3", "pnpm", "yarn", "npx", "bun", "deno", "cargo", "rustc", "go", "dotnet", "java", "javac", "mvn", "gradle", "pytest", "pip", "pip3", "uv", "ruff", "rg"];
 
     if args.len() > 64 {
         return Err("Too many command arguments.".to_string());
@@ -275,8 +288,8 @@ pub fn run_command(
         .map_err(|error| error.to_string())?;
 
     Ok(CommandResult {
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        stdout: bounded_output(&output.stdout),
+        stderr: bounded_output(&output.stderr),
         status: output.status.code().unwrap_or(-1),
     })
 }

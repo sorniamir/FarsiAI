@@ -52,7 +52,7 @@ function toolPath(workspace: string, relative: string): string {
   return `${base}${separator}${clean.replace(/[\\/]+/g, separator)}`;
 }
 
-function truncate(value: string, max = 18000): string {
+function truncate(value: string, max = 65000): string {
   return value.length > max ? `${value.slice(0, max)}\n…[truncated]` : value;
 }
 
@@ -447,11 +447,11 @@ export default function AppFinal() {
     const controller = new AbortController();
     agentAbortRef.current = controller;
     setAgentRunning(true);
-    setAgentTimeline([`● Task: ${task}`, '✓ Permission boundary active', '○ Codex planner connected']);
+    setAgentTimeline([`● Task: ${task}`, '✓ Permission boundary active', '○ Codex Pro · Kimi K2.7 Code / GLM-5.2']);
     let observations: AgentObservation[] = [];
 
     try {
-      for (let step = 1; step <= 16; step += 1) {
+      for (let step = 1; step <= 24; step += 1) {
         if (controller.signal.aborted) break;
         setAgentTimeline((current) => [...current, `○ Planning step ${step}…`]);
 
@@ -462,18 +462,25 @@ export default function AppFinal() {
           break;
         }
         if (plan.type === 'final') {
-          setAgentTimeline((current) => [...current, `✓ ${plan.message}`]);
+          setAgentTimeline((current) => [...current, `✓ ${plan.message}${plan.model ? ` · ${plan.model.replace('@cf/', '')}` : ''}`]);
           break;
         }
 
         const tool = plan.tool;
-        setAgentTimeline((current) => [...current, `→ ${tool.name}`]);
+        setAgentTimeline((current) => [...current, `→ ${tool.name}${plan.model ? ` · ${plan.model.replace('@cf/', '')}` : ''}`]);
         try {
           const result = await executeAgentTool(tool);
           observations = [...observations, { role: 'tool', name: tool.name, content: result }].slice(-18);
+          const commandExit = tool.name === 'run_command' ? result.match(/(?:^|\n)exit=(-?\d+)/i) : null;
+          const exitCode = commandExit ? Number(commandExit[1]) : 0;
+          const failed = tool.name === 'run_command' && exitCode !== 0;
           setAgentTimeline((current) => [
             ...current,
-            result.includes('BACKUP') ? `✓ ${tool.name} completed · backup protected` : `✓ ${tool.name} completed`,
+            failed
+              ? `⚠ ${tool.name} failed · exit ${exitCode} · Codex will diagnose`
+              : result.includes('BACKUP')
+                ? `✓ ${tool.name} completed · backup protected`
+                : `✓ ${tool.name} completed`,
           ]);
           if (result.startsWith('USER_DENIED_')) {
             observations = [...observations, { role: 'note', content: 'The user denied the requested side effect. Choose a safer alternative or stop.' }].slice(-18);
@@ -665,7 +672,7 @@ export default function AppFinal() {
           <section className="workspace-layout">
             <div className="workspace-main glass">
               <div className="workspace-title">
-                <div><h2>Codex Agent</h2><p>Task را بگو؛ Agent فایل را می‌خواند، تغییر می‌دهد، دستور اجرا می‌کند و نتیجه را بررسی می‌کند.</p></div>
+                <div><h2>Codex Pro Agent</h2><p>پروژه را تحلیل می‌کند، فایل واقعی را می‌خواند و تغییر می‌دهد، تست/بیلد را اجرا می‌کند و تا نتیجه معتبر روی خطاها ادامه می‌دهد.</p></div>
                 <span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>{workspaceGranted ? 'Workspace approved' : 'No workspace'}</span>
               </div>
 
