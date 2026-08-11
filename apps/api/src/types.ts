@@ -47,6 +47,8 @@ export type Env = {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   GEMINI_API_KEY?: string;
   NANO_BANANA_MODEL?: string;
+  GEMINI_TTS_MODEL?: string;
+  GEMINI_TTS_VOICE?: string;
 };
 
 export type ConversationMessage = {

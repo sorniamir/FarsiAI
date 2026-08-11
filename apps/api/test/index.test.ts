@@ -58,6 +58,14 @@ function voiceRequest(body: unknown, headers: Record<string, string> = {}): Requ
   });
 }
 
+function ttsRequest(body: unknown, headers: Record<string, string> = {}): Request {
+  return new Request('https://api.example.com/v1/voice/synthesize', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
 describe('FarsiAI Worker', () => {
   beforeEach(() => {
     mock.method(console, 'log', () => undefined);
@@ -123,6 +131,49 @@ describe('FarsiAI Worker', () => {
     assert.equal(unsupported.status, 415);
     assert.equal(oversized.status, 413);
     assert.equal(env.AI.run.mock.callCount(), 0);
+    assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 0);
+  });
+
+  it('generates a playable WAV response for Persian AI speech', async () => {
+    const pcm = Buffer.from([0, 0, 20, 0, 40, 0, 20, 0]);
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), 'https://generativelanguage.googleapis.com/v1beta/interactions');
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get('x-goog-api-key'), 'gemini-test-key');
+      const body = JSON.parse(String(init?.body)) as any;
+      assert.equal(body.model, 'gemini-3.1-flash-tts-preview');
+      assert.equal(body.response_format.type, 'audio');
+      assert.match(body.input, /پاسخ آزمایشی فارسی/);
+      return Response.json({
+        output_audio: {
+          data: pcm.toString('base64'),
+          mime_type: 'audio/L16;codec=pcm;rate=24000',
+        },
+      });
+    });
+    const env = createEnv({ GEMINI_API_KEY: 'gemini-test-key' });
+
+    const response = await worker.fetch(ttsRequest(
+      { text: 'پاسخ آزمایشی فارسی', language: 'fa' },
+      { 'cf-connecting-ip': '203.0.113.21', 'cf-ray': 'tts-test-ray' },
+    ), env);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'audio/wav');
+    assert.equal(response.headers.get('x-request-id'), 'tts-test-ray');
+    const wav = Buffer.from(await response.arrayBuffer());
+    assert.equal(wav.subarray(0, 4).toString('ascii'), 'RIFF');
+    assert.equal(wav.subarray(8, 12).toString('ascii'), 'WAVE');
+    assert.equal(wav.length, 44 + pcm.length);
+    assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 1);
+  });
+
+  it('reports an explicit server configuration error when Persian TTS has no key', async () => {
+    const env = createEnv();
+    const response = await worker.fetch(ttsRequest({ text: 'سلام' }), env);
+
+    assert.equal(response.status, 503);
+    assert.equal((await response.json() as { code: string }).code, 'VOICE_TTS_UNCONFIGURED');
     assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 0);
   });
 

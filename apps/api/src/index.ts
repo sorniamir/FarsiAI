@@ -2,7 +2,7 @@ import { handleAgentPlan } from './ai/agent-v2';
 import { attachmentContext, firstImageAttachment, normalizeAttachments } from './ai/attachments';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
-import { handleVoiceTranscription } from './ai/voice';
+import { handleVoiceSynthesis, handleVoiceTranscription } from './ai/voice';
 import {
   refundDailyQuota,
   refundGuestDailyQuota,
@@ -105,6 +105,10 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/v1/voice/transcribe') {
       return handleVoiceTranscription(request, env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/voice/synthesize') {
+      return handleVoiceSynthesis(request, env);
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/ai') {
