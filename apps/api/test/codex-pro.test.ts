@@ -72,6 +72,37 @@ describe('Codex Pro orchestration', () => {
     assert.equal(payload.model, '@cf/moonshotai/kimi-k2.7-code');
   });
 
+  it('offers only executable tools to the mobile client and forbids fake terminal validation', async () => {
+    authenticate();
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      const names = input.tools.map((tool: any) => tool.name).sort();
+      assert.deepEqual(names, ['compose_message', 'list_directory', 'open_app', 'read_file', 'read_notifications', 'write_file']);
+      assert.doesNotMatch(JSON.stringify(input.tools), /run_command/);
+      assert.match(input.messages[0].content, /cannot execute terminal commands/i);
+      return { tool_calls: [{ name: 'list_directory', arguments: { path: '.' } }] };
+    });
+
+    const env = createEnv({
+      AI: { run: aiRun },
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    });
+
+    const response = await worker.fetch(request({
+      task: 'پروژه موبایل را بررسی کن و باگ را رفع کن',
+      workspace: 'mobile-imported-workspace',
+      observations: [],
+      clientKind: 'mobile',
+      clientCapabilities: { tools: ['list_directory', 'read_file', 'write_file', 'open_app', 'compose_message', 'read_notifications'] },
+    }), env);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as any;
+    assert.equal(payload.ok, true);
+    assert.equal(payload.tool.name, 'list_directory');
+    assert.equal(aiRun.mock.callCount(), 1);
+  });
+
   it('treats a non-zero command exit as failure and lets the model continue repairing', async () => {
     authenticate();
     const aiRun = mock.fn(async (_model: string, input: any) => {
