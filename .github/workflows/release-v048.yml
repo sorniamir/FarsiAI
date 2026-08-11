@@ -16,7 +16,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply verified v0.4.8 source overlay
         shell: pwsh
-        run: Expand-Archive -LiteralPath ci/farsiai-v048-overlay.zip -DestinationPath . -Force
+        run: |
+          $encoded = (Get-ChildItem ci/farsiai-v048-overlay.b64.* | Sort-Object Name | Get-Content -Raw) -join ''
+          $archive = Join-Path $env:RUNNER_TEMP 'farsiai-v048-overlay.zip'
+          [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($encoded))
+          Expand-Archive -LiteralPath $archive -DestinationPath . -Force
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -50,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply verified v0.4.8 source overlay
-        run: unzip -o ci/farsiai-v048-overlay.zip
+        run: cat ci/farsiai-v048-overlay.b64.* | base64 --decode > /tmp/farsiai-v048-overlay.zip && unzip -o /tmp/farsiai-v048-overlay.zip
       - uses: actions/setup-node@v4
         with:
           node-version: 22
