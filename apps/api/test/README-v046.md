@@ -1,0 +1,1 @@
+v0.4.6 regression coverage lives in `v046-image-attachments.test.ts` and verifies that stale image references cannot trigger edits, explicit edits require a selected reference, attachments are converted into chat context, and unsupported attachments are rejected before quota/AI execution.

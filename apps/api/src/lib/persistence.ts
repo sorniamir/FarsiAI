@@ -66,16 +66,20 @@ export async function saveMessage(
   userId: string,
   role: StoredRole,
   content: string,
+  imageUrl?: string,
 ): Promise<boolean> {
+  const payload: Record<string, string> = {
+    conversation_id: conversationId,
+    user_id: userId,
+    role,
+    content,
+  };
+  if (imageUrl) payload.image_url = imageUrl;
+
   const response = await supabaseAdminFetch(env, 'messages', {
     method: 'POST',
     headers: { prefer: 'return=minimal' },
-    body: JSON.stringify({
-      conversation_id: conversationId,
-      user_id: userId,
-      role,
-      content,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response?.ok) {

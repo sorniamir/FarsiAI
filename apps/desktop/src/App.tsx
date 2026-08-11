@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useDesktopAgent } from './hooks/useDesktopAgent';
+import { prepareAttachments } from './lib/chatAttachments';
 import { planAgentStep, type AgentObservation, type AgentToolCall } from './services/agent';
-import { sendAiRequest, type AiMode, type DailyQuota } from './services/api';
+import { sendAiRequest, type AiMode, type ApiAttachment, type DailyQuota } from './services/api';
 import { getCurrentUser, onAuthChanged, signIn, signOut, signUp } from './services/auth';
 import {
   getAccountSnapshot,
@@ -15,7 +16,15 @@ import {
 } from './services/data';
 
 type Tab = 'chat' | 'codex' | 'computer';
-type UiMessage = { id: string; role: 'user' | 'assistant'; text?: string; image?: string };
+type UiMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text?: string;
+  image?: string;
+  revisedPrompt?: string;
+  attachments?: ApiAttachment[];
+  replyToId?: string;
+};
 type ApprovalState = { title: string; detail: string; confirmLabel: string };
 
 const USER_FULL_QUOTA: DailyQuota = { chatRemaining: 10, imageRemaining: 4 };
@@ -25,6 +34,7 @@ const STARTERS = [
   'این ایده را تبدیل به یک برنامه اجرایی کن',
   'برای محصول من یک متن معرفی حرفه‌ای بنویس',
 ];
+const ATTACH_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/bmp,image/svg+xml,.pdf,.docx,.xlsx,.xls,.csv,.txt,.html,.xml,.odt,.ods';
 
 function formatDate(value: string): string {
   try {
@@ -50,6 +60,11 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
+function formatFileSize(size: number): string {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function AppFinal() {
   const agent = useDesktopAgent();
   const [authReady, setAuthReady] = useState(false);
@@ -64,6 +79,10 @@ export default function AppFinal() {
   const [mode, setMode] = useState<AiMode>('chat');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<ApiAttachment[]>([]);
+  const [replyTarget, setReplyTarget] = useState<UiMessage | null>(null);
+  const [composerError, setComposerError] = useState('');
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
   const [workspace, setWorkspace] = useState('');
   const [workspaceGranted, setWorkspaceGranted] = useState(false);
@@ -122,11 +141,18 @@ export default function AppFinal() {
     setQuota(nextQuota);
   }
 
+  function resetComposer() {
+    setAttachments([]);
+    setReplyTarget(null);
+    setComposerError('');
+  }
+
   function enterGuest() {
     setGuestMode(true);
     setQuota(GUEST_FULL_QUOTA);
     setMessages([]);
     setConversationId(undefined);
+    resetComposer();
     setTab('chat');
   }
 
@@ -137,7 +163,44 @@ export default function AppFinal() {
     setMessages([]);
     setConversationId(undefined);
     setQuota(undefined);
+    resetComposer();
     setTab('chat');
+  }
+
+  function setChatMode(next: AiMode) {
+    setMode(next);
+    if (next !== 'image') setReplyTarget(null);
+    setComposerError('');
+  }
+
+  async function handleAttachmentFiles(fileList: FileList | null) {
+    if (!fileList?.length || sending) return;
+    try {
+      const result = await prepareAttachments(Array.from(fileList), attachments);
+      if (result.accepted.length) {
+        if (mode === 'image' && result.accepted.some((item) => item.mimeType.startsWith('image/'))) {
+          setReplyTarget(null);
+        }
+        setAttachments((current) => [...current, ...result.accepted]);
+      }
+      setComposerError(result.errors.join(' '));
+    } catch (error) {
+      setComposerError(error instanceof Error ? error.message : 'خواندن فایل ناموفق بود.');
+    } finally {
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((item) => item.id !== id));
+  }
+
+  function replyToImage(message: UiMessage) {
+    if (!message.image) return;
+    setMode('image');
+    setReplyTarget(message);
+    setAttachments((current) => current.filter((item) => !item.mimeType.startsWith('image/')));
+    setComposerError('');
   }
 
   function requestApproval(next: ApprovalState): Promise<boolean> {
@@ -154,12 +217,30 @@ export default function AppFinal() {
   }
 
   async function submitChat(prefill?: string) {
-    const text = (prefill ?? input).trim();
+    const typedText = (prefill ?? input).trim();
+    const fallbackText = mode === 'chat' && attachments.length > 0
+      ? 'فایل‌های ضمیمه‌شده را بررسی کن و نکات مهم را توضیح بده.'
+      : '';
+    const text = typedText || fallbackText;
     if (!text || sending) return;
 
     const before = messages;
-    setMessages((current) => [...current, { id: `${Date.now()}-u`, role: 'user', text }]);
+    const requestAttachments = attachments;
+    const requestReply = replyTarget;
+    const attachedImage = requestAttachments.find((item) => item.mimeType.startsWith('image/'));
+    const imageAction: 'generate' | 'edit' = mode === 'image' && (requestReply?.image || attachedImage)
+      ? 'edit'
+      : 'generate';
+
+    setMessages((current) => [...current, {
+      id: `${Date.now()}-u`,
+      role: 'user',
+      text: typedText || undefined,
+      attachments: requestAttachments,
+      replyToId: requestReply?.id,
+    }]);
     setInput('');
+    resetComposer();
     setSending(true);
 
     try {
@@ -171,6 +252,11 @@ export default function AppFinal() {
           .filter((item) => item.text)
           .slice(-10)
           .map((item) => ({ role: item.role, content: item.text! })),
+        attachments: requestAttachments,
+        imageAction: mode === 'image' ? imageAction : undefined,
+        referenceImage: mode === 'image' && imageAction === 'edit' ? requestReply?.image : undefined,
+        referencePrompt: mode === 'image' && imageAction === 'edit' ? requestReply?.revisedPrompt : undefined,
+        replyToMessageId: requestReply?.id,
       });
 
       if (!result.ok) {
@@ -182,7 +268,13 @@ export default function AppFinal() {
       if (result.quota) setQuota(result.quota);
 
       const assistant: UiMessage = result.mode === 'image'
-        ? { id: `${Date.now()}-i`, role: 'assistant', image: result.image, text: 'تصویر آماده شد.' }
+        ? {
+            id: `${Date.now()}-i`,
+            role: 'assistant',
+            image: result.image,
+            revisedPrompt: result.revisedPrompt,
+            text: result.edited ? 'ویرایش تصویر آماده شد.' : 'تصویر جدید آماده شد.',
+          }
         : { id: `${Date.now()}-a`, role: 'assistant', text: result.text };
       setMessages((current) => [...current, assistant]);
       if (user) await refreshCloudState();
@@ -204,6 +296,7 @@ export default function AppFinal() {
       text: message.content,
       image: message.imageUrl,
     })));
+    resetComposer();
     setTab('chat');
   }
 
@@ -211,6 +304,8 @@ export default function AppFinal() {
     setConversationId(undefined);
     setMessages([]);
     setMode('chat');
+    setInput('');
+    resetComposer();
     setTab('chat');
   }
 
@@ -414,6 +509,8 @@ export default function AppFinal() {
   const isGuest = guestMode && !user;
   const fullQuota = isGuest ? GUEST_FULL_QUOTA : USER_FULL_QUOTA;
   const shownQuota = quota ?? fullQuota;
+  const canSend = !sending && (input.trim().length > 0 || (mode === 'chat' && attachments.length > 0));
+  const imageIsEditing = mode === 'image' && (Boolean(replyTarget?.image) || attachments.some((item) => item.mimeType.startsWith('image/')));
 
   return (
     <div className="app-shell">
@@ -425,7 +522,7 @@ export default function AppFinal() {
 
         <button className="new-chat" onClick={newConversation}>＋ گفتگوی جدید</button>
         <nav className="nav-stack">
-          <NavButton active={tab === 'chat'} label="Chat" caption="گفتگو و تصویر" onClick={() => setTab('chat')} />
+          <NavButton active={tab === 'chat'} label="Chat" caption="گفتگو، فایل و تصویر" onClick={() => setTab('chat')} />
           <NavButton active={tab === 'codex'} label="Codex" caption={isGuest ? 'نیازمند ورود' : 'Agent واقعی PC'} onClick={() => setTab('codex')} />
           <NavButton active={tab === 'computer'} label="Computer" caption={isGuest ? 'نیازمند ورود' : 'Workspace و Terminal'} onClick={() => setTab('computer')} />
         </nav>
@@ -469,10 +566,10 @@ export default function AppFinal() {
             <div className="chat-stage glass">
               <div className="mode-row">
                 <div className="segmented">
-                  <button className={mode === 'chat' ? 'active' : ''} onClick={() => setMode('chat')}>Chat</button>
-                  <button className={mode === 'image' ? 'active' : ''} onClick={() => setMode('image')}>Image</button>
+                  <button className={mode === 'chat' ? 'active' : ''} onClick={() => setChatMode('chat')}>Chat</button>
+                  <button className={mode === 'image' ? 'active' : ''} onClick={() => setChatMode('image')}>Image</button>
                 </div>
-                <span>{isGuest ? 'Guest quota enforced by server' : 'Cloud-synced conversation'}</span>
+                <span>{mode === 'image' ? (imageIsEditing ? 'ویرایش فقط تصویر انتخاب‌شده' : 'هر درخواست، تصویر جدید') : (isGuest ? 'Guest quota enforced by server' : 'Cloud-synced conversation')}</span>
               </div>
 
               <div className="messages">
@@ -486,19 +583,66 @@ export default function AppFinal() {
                 ) : messages.map((message) => (
                   <article key={message.id} className={`message ${message.role}`}>
                     <div className="message-label">{message.role === 'user' ? 'You' : 'FarsiAI'}</div>
+                    {message.attachments?.length ? (
+                      <div className="message-attachments">
+                        {message.attachments.map((attachment) => (
+                          <div className="message-attachment" key={attachment.id}>
+                            {attachment.previewUrl ? <img src={attachment.previewUrl} alt="attachment" /> : <span className="file-badge">FILE</span>}
+                            <div><strong>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {message.text ? <div className="message-text">{message.text}</div> : null}
                     {message.image ? <img className="generated-image" src={message.image} alt="AI generated" /> : null}
+                    {message.role === 'assistant' && message.image ? (
+                      <div className="image-message-actions"><button className="secondary image-reply-button" onClick={() => replyToImage(message)}>↩ ویرایش همین تصویر</button></div>
+                    ) : null}
                   </article>
                 ))}
-                {sending ? <div className="thinking"><i /><span>{mode === 'image' ? 'در حال ساخت تصویر…' : 'در حال فکر کردن…'}</span></div> : null}
+                {sending ? <div className="thinking"><i /><span>{mode === 'image' ? 'در حال پردازش تصویر…' : 'در حال فکر کردن…'}</span></div> : null}
               </div>
 
-              <div className="composer">
-                <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode === 'image' ? 'تصویر موردنظرت را توصیف کن…' : 'هر چیزی می‌خواهی بپرس…'} />
+              <div className="composer composer-v046">
+                <input
+                  ref={attachmentInputRef}
+                  className="hidden-file-input"
+                  type="file"
+                  accept={ATTACH_ACCEPT}
+                  multiple
+                  onChange={(event) => void handleAttachmentFiles(event.target.files)}
+                />
+
+                {replyTarget?.image ? (
+                  <div className="reply-preview">
+                    <img src={replyTarget.image} alt="reply target" />
+                    <div><strong>ویرایش همین تصویر</strong><span>درخواست بعدی فقط روی این تصویر اعمال می‌شود.</span></div>
+                    <button className="icon-button" onClick={() => setReplyTarget(null)}>×</button>
+                  </div>
+                ) : null}
+
+                {attachments.length ? (
+                  <div className="attachment-preview-list">
+                    {attachments.map((attachment) => (
+                      <div className="attachment-preview" key={attachment.id}>
+                        {attachment.previewUrl ? <img src={attachment.previewUrl} alt="attachment preview" /> : <span className="file-badge">FILE</span>}
+                        <div><strong title={attachment.name}>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></div>
+                        <button className="attachment-remove" onClick={() => removeAttachment(attachment.id)}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {composerError ? <div className="composer-error">{composerError}</div> : null}
+                <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode === 'image' ? 'تصویر موردنظرت را توصیف کن…' : 'پیام بنویس یا فایل اضافه کن…'} />
                 <div className="composer-footer">
-                  <span>{mode === 'image' ? 'Image mode' : 'FarsiAI Chat'}</span>
-                  <button className="primary" disabled={!input.trim() || sending} onClick={() => submitChat()}>{sending ? '…' : 'ارسال ↑'}</button>
+                  <div className="composer-tools">
+                    <button className="secondary attach-button" disabled={sending} onClick={() => attachmentInputRef.current?.click()}>＋ افزودن فایل</button>
+                    <span>{mode === 'image' ? (imageIsEditing ? 'Image edit · Explicit reference' : 'Image generate · New image') : 'FarsiAI Chat · Attachments enabled'}</span>
+                  </div>
+                  <button className="primary" disabled={!canSend} onClick={() => submitChat()}>{sending ? '…' : 'ارسال ↑'}</button>
                 </div>
+                <div className="composer-policy">ویرایش تصویر فقط با «ویرایش همین تصویر» یا ضمیمه‌کردن تصویر فعال می‌شود؛ تصاویر قبلی خودکار استفاده نمی‌شوند.</div>
               </div>
             </div>
 

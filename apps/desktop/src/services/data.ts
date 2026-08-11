@@ -68,7 +68,10 @@ async function fetchConversationMessages(conversationId: string): Promise<Stored
 async function prefetchRecentConversations(conversations: ConversationSummary[]): Promise<void> {
   if (!supabase || prefetchPromise) return prefetchPromise ?? Promise.resolve();
 
+  // Image results are persisted as data URLs. Avoid preloading image/mixed threads,
+  // otherwise startup can download several megabytes before the user opens them.
   const ids = conversations
+    .filter((item) => item.mode === 'chat')
     .slice(0, 6)
     .map((item) => item.id)
     .filter((id) => !isFresh(messageCache.get(id)) && !inFlightMessages.has(id));
@@ -177,7 +180,7 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     conversationVersions.set(conversation.id, conversation.updatedAt);
   }
 
-  // One background query warms the six most recent conversations.
+  // One background query warms recent text-only conversations without preloading image payloads.
   void prefetchRecentConversations(conversations);
   return conversations;
 }

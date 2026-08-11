@@ -4,7 +4,7 @@
     "owner": "sorniamirs-team",
     "slug": "amir-sorni",
     "scheme": "farsiai",
-    "version": "0.3.1",
+    "version": "0.4.6",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -13,9 +13,20 @@
       "backgroundColor": "#000000",
       "resizeMode": "contain"
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FarsiAI برای انتخاب تصویر و افزودن آن به پیام به دسترسی گالری نیاز دارد.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-document-picker"
+    ],
     "android": {
       "package": "ai.farsiai.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#000000"
@@ -26,6 +37,7 @@
       "bundleIdentifier": "ai.farsiai.app",
       "supportsTablet": true,
       "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "FarsiAI برای انتخاب تصویر و افزودن آن به پیام به دسترسی گالری نیاز دارد.",
         "NSPhotoLibraryAddUsageDescription": "FarsiAI برای ذخیره تصویر ساخته‌شده به گالری نیاز به دسترسی دارد."
       }
     },
