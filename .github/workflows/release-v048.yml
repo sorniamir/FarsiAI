@@ -30,6 +30,7 @@ jobs:
       - run: npm run test:api
       - run: node --experimental-strip-types apps/desktop/test/agent-path.test.mjs
       - run: npm --workspace apps/desktop run icons
+      - run: npm --workspace apps/desktop run build
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- --nocapture
       - run: npm run desktop:build
       - name: Verify installer
@@ -85,3 +86,4 @@ jobs:
           name: FarsiAI-Mobile-v0.4.8
           if-no-files-found: error
           path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+
