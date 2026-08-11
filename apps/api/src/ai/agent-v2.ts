@@ -336,7 +336,7 @@ function buildPlannerInput(task: string, workspace: string, observations: AgentO
     });
   }
 
-  const offeredTools = isDirectSimpleWriteTask(task)
+  const offeredTools = isDirectSimpleWriteTask(task) && observations.length === 0
     ? tools.filter((tool) => tool.name === 'write_file')
     : tools;
 
