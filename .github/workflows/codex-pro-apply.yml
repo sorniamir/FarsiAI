@@ -31,11 +31,12 @@ jobs:
           git diff --check
           git diff -- apps/api/src/index.ts apps/desktop/src/App.tsx apps/desktop/src-tauri/src/tools.rs apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/api/package.json .github/workflows/desktop-windows.yml
 
-      - name: Commit patch
+      - name: Commit source patch
         shell: bash
         run: |
           git config user.name "FarsiAI Codex CI"
           git config user.email "actions@users.noreply.github.com"
-          git add apps/api/src/index.ts apps/desktop/src/App.tsx apps/desktop/src-tauri/src/tools.rs apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/api/package.json .github/workflows/desktop-windows.yml
+          git checkout -- .github/workflows/desktop-windows.yml
+          git add apps/api/src/index.ts apps/desktop/src/App.tsx apps/desktop/src-tauri/src/tools.rs apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/api/package.json
           git commit -m "Apply Codex Pro source patch"
           git push origin HEAD:agent/codex-pro-v0.4.7
