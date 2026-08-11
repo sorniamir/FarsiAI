@@ -297,8 +297,6 @@ async function postTurn(input: {
 }): Promise<Response> {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
-    'x-farsiai-client': `desktop/${CODEX_CLIENT_VERSION}`,
-    'x-farsiai-codex-protocol': CODEX_PROTOCOL,
   };
   if (input.token) headers.authorization = `Bearer ${input.token}`;
   return fetch(`${API_URL}/v2/codex/turn`, {
