@@ -106,6 +106,27 @@ export function DesktopVoiceChat({ ask, remaining }: { ask: (text: string) => Pr
     requestAbortRef.current = null;
     if (!aliveRef.current || controller.signal.aborted) return;
     if (!result.ok) {
+      const synthesis = window.speechSynthesis;
+      if (synthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'fa-IR';
+        utterance.rate = 0.96;
+        utterance.pitch = 1;
+        const voices = synthesis.getVoices();
+        utterance.voice = voices.find((voice) => voice.lang.toLowerCase().startsWith('fa'))
+          ?? voices.find((voice) => /persian|farsi/i.test(voice.name))
+          ?? null;
+        utterance.onend = resumeConversationAfterPlayback;
+        utterance.onerror = () => {
+          setStatus('error');
+          setError('پخش صدای فارسی در WebView2 ناموفق بود؛ بسته صدای فارسی Windows را فعال کنید.');
+        };
+        setPartial('');
+        setStatus('speaking');
+        synthesis.cancel();
+        synthesis.speak(utterance);
+        return;
+      }
       setPartial('');
       setStatus('error');
       const diagnostic = [result.code, result.requestId ? `request: ${result.requestId}` : ''].filter(Boolean).join(' · ');
@@ -285,7 +306,7 @@ export function DesktopVoiceChat({ ask, remaining }: { ask: (text: string) => Pr
         </div>
         <div className="desktop-voice-composer"><textarea value={manual} onChange={(event) => setManual(event.target.value)} placeholder="یا پیام را اینجا بنویس…" /><button className="primary" disabled={!manual.trim() || status === 'thinking' || status === 'transcribing'} onClick={() => void send(manual)}>ارسال</button></div>
       </div>
-      <aside className="inspector glass voice-inspector"><h3>کنترل مکالمه</h3><FeatureLine title="Microphone" value={navigator.mediaDevices ? 'Recorder ready' : 'Unavailable'} ready={Boolean(navigator.mediaDevices)} /><FeatureLine title="Persian ASR" value="Whisper v3 Turbo" ready /><FeatureLine title="Persian Voice" value="Gemini Neural TTS" ready /><FeatureLine title="Hands-free loop" value={continuous ? 'Enabled' : 'Paused'} ready={continuous} /><FeatureLine title="Echo protection" value="Mic off during playback" ready /><div className="divider" /><h3>حریم خصوصی</h3><p>میکروفن فقط در نوبت شما فعال است. هنگام پخش پاسخ AI کاملاً بسته می‌شود تا صدا دوباره ضبط نشود. صدا و متن فقط برای پردازش به API امن FarsiAI ارسال می‌شوند.</p></aside>
+      <aside className="inspector glass voice-inspector"><h3>کنترل مکالمه</h3><FeatureLine title="Microphone" value={navigator.mediaDevices ? 'Recorder ready' : 'Unavailable'} ready={Boolean(navigator.mediaDevices)} /><FeatureLine title="Persian ASR" value="Whisper v3 Turbo" ready /><FeatureLine title="Persian Voice" value="Online TTS + fa-IR fallback" ready /><FeatureLine title="Hands-free loop" value={continuous ? 'Enabled' : 'Paused'} ready={continuous} /><FeatureLine title="Echo protection" value="Mic off during playback" ready /><div className="divider" /><h3>حریم خصوصی</h3><p>میکروفن فقط در نوبت شما فعال است. هنگام پخش پاسخ AI کاملاً بسته می‌شود تا صدا دوباره ضبط نشود. صدا و متن فقط برای پردازش به API امن FarsiAI ارسال می‌شوند.</p></aside>
     </section>
   );
 }
