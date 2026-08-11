@@ -66,6 +66,8 @@ jobs:
           distribution: temurin
           java-version: "17"
       - run: npm install
+      - name: Link Codex native module
+        run: npm install ./apps/mobile/modules/codex-device --workspace apps/mobile --no-save
       - run: npm run check:mobile
       - name: Verify Expo module autolinking
         working-directory: apps/mobile
