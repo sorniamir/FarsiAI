@@ -66,7 +66,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.6' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.7' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -89,7 +89,7 @@ describe('FarsiAI Worker', () => {
     const aiRun = mock.fn(async (model: string) => {
       modelCall += 1;
       if (modelCall === 1) throw new Error('primary model temporarily unavailable');
-      assert.equal(model, '@cf/zai-org/glm-4.7-flash');
+      assert.equal(model, '@cf/zai-org/glm-5.2');
       return {
         tool_calls: [
           { name: 'read_file', arguments: { path: 'package.json' } },
@@ -116,7 +116,8 @@ describe('FarsiAI Worker', () => {
       ok: true,
       type: 'tool',
       tool: { name: 'read_file', arguments: { path: 'package.json' } },
-      model: '@cf/zai-org/glm-4.7-flash',
+      model: '@cf/zai-org/glm-5.2',
+      requestId: 'codex-test-ray',
     });
     assert.equal(aiRun.mock.callCount(), 2);
   });

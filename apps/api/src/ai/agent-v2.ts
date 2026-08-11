@@ -330,9 +330,13 @@ function buildPlannerInput(task: string, workspace: string, observations: AgentO
     });
   }
 
+  const offeredTools = isDirectSimpleWriteTask(task)
+    ? tools.filter((tool) => tool.name === 'write_file')
+    : tools;
+
   return {
     messages,
-    tools,
+    tools: offeredTools,
     tool_choice: requireTool ? 'required' : 'auto',
     parallel_tool_calls: false,
     temperature: 0.1,
@@ -385,7 +389,17 @@ async function runPlannerWithFallback(
         const tool = extractToolCall(result);
         const rawCall = rawToolCall(result);
         const text = extractText(result);
+        const offeredToolNames = new Set(
+          (Array.isArray(plannerInput.tools) ? plannerInput.tools : [])
+            .map((item) => item && typeof item === 'object' ? String((item as Record<string, unknown>).name ?? '') : '')
+            .filter(Boolean),
+        );
 
+        if (tool && offeredToolNames.size > 0 && !offeredToolNames.has(tool.name)) {
+          lastError = new Error(`Model requested ${tool.name}, which was not offered for this step.`);
+          console.warn(JSON.stringify({ event: 'codex_unoffered_tool_call', requestId, model, tool: tool.name, compatibilityMode }));
+          continue;
+        }
         if (rawCall && !tool) {
           lastError = new Error('Model returned an invalid or unsafe tool call.');
           console.warn(JSON.stringify({ event: 'codex_invalid_tool_call', requestId, model, compatibilityMode }));
