@@ -50,6 +50,14 @@ function agentRequest(body: unknown, headers: Record<string, string> = {}): Requ
   });
 }
 
+function voiceRequest(body: unknown, headers: Record<string, string> = {}): Request {
+  return new Request('https://api.example.com/v1/voice/transcribe', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
 describe('FarsiAI Worker', () => {
   beforeEach(() => {
     mock.method(console, 'log', () => undefined);
@@ -66,7 +74,7 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(new Request('https://api.example.com/health'), createEnv());
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.7' });
+    assert.deepEqual(await response.json(), { ok: true, service: 'farsiai-api', version: '0.4.8' });
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://app.example.com');
   });
 
@@ -76,6 +84,46 @@ describe('FarsiAI Worker', () => {
 
     assert.equal(response.status, 401);
     assert.equal(env.AI.run.mock.callCount(), 0);
+  });
+
+  it('transcribes a real Persian voice payload through Whisper', async () => {
+    const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
+      assert.equal(model, '@cf/openai/whisper-large-v3-turbo');
+      assert.equal(input.language, 'fa');
+      assert.equal(input.task, 'transcribe');
+      assert.equal(input.vad_filter, true);
+      return { text: 'سلام، وضعیت پروژه را بررسی کن.' };
+    });
+    const env = createEnv({ AI: { run: aiRun } });
+    const audio = Buffer.from('a'.repeat(256)).toString('base64');
+
+    const response = await worker.fetch(voiceRequest(
+      { audio, mimeType: 'audio/webm;codecs=opus', language: 'fa' },
+      { 'cf-connecting-ip': '203.0.113.20', 'cf-ray': 'voice-test-ray' },
+    ), env);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      text: 'سلام، وضعیت پروژه را بررسی کن.',
+      model: '@cf/openai/whisper-large-v3-turbo',
+      requestId: 'voice-test-ray',
+    });
+    assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 1);
+    assert.equal(aiRun.mock.callCount(), 1);
+  });
+
+  it('rejects empty, unsupported and oversized voice payloads before AI processing', async () => {
+    const env = createEnv();
+    const empty = await worker.fetch(voiceRequest({ audio: '', mimeType: 'audio/webm' }), env);
+    const unsupported = await worker.fetch(voiceRequest({ audio: 'A'.repeat(128), mimeType: 'video/mp4' }), env);
+    const oversized = await worker.fetch(voiceRequest({ audio: 'A'.repeat(10_500_001), mimeType: 'audio/webm' }), env);
+
+    assert.equal(empty.status, 400);
+    assert.equal(unsupported.status, 415);
+    assert.equal(oversized.status, 413);
+    assert.equal(env.AI.run.mock.callCount(), 0);
+    assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 0);
   });
 
   it('falls back to the secondary Codex model and returns a real tool call', async () => {

@@ -2,6 +2,7 @@ import { handleAgentPlan } from './ai/agent-v2';
 import { attachmentContext, firstImageAttachment, normalizeAttachments } from './ai/attachments';
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
+import { handleVoiceTranscription } from './ai/voice';
 import {
   refundDailyQuota,
   refundGuestDailyQuota,
@@ -93,13 +94,17 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.7' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.4.8' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
       // Local tool failures are intentionally returned to Codex Pro as observations.
       // The planner can diagnose and recover instead of stopping after the first error.
       return handleAgentPlan(request, env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/voice/transcribe') {
+      return handleVoiceTranscription(request, env);
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/ai') {
