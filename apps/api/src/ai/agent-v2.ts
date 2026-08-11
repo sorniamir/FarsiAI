@@ -235,7 +235,7 @@ function looksLikeActionTask(task: string): boolean {
 }
 
 function isDirectSimpleWriteTask(task: string): boolean {
-  const hasFile = /(?:فایل|file)\s+(?:(?:به\s*نام|بنام|named|called)\s+)?["'\`“]?[^\s"'\`”]+\.[a-zA-Z0-9]{1,12}/iu.test(task);
+  const hasFile = /(?:فایل|file)\s+(?:(?:به\s*نام|بنام|named|called)\s+)?["'`“]?[^\s"'`”]+\.[a-zA-Z0-9]{1,12}/iu.test(task);
   const hasWriteVerb = /(?:بنویس|بذار|بزار|قرار\s+بده|write|containing)/iu.test(task);
   const hasContentTarget = /(?:داخل(?:ش|\s+آن)?|محتوا(?:ی|یش)?|with\s+(?:the\s+)?content|containing)/iu.test(task);
   if (!hasFile || !hasWriteVerb || !hasContentTarget) return false;
