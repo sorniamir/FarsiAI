@@ -54,7 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply verified v0.4.8 source overlay
-        run: cat ci/farsiai-v048-overlay.b64.* | base64 --decode > /tmp/farsiai-v048-overlay.zip && unzip -o /tmp/farsiai-v048-overlay.zip
+        run: |
+          cat ci/farsiai-v048-overlay.b64.* | base64 --decode > /tmp/farsiai-v048-overlay.zip
+          unzip -o /tmp/farsiai-v048-overlay.zip || [ "$?" -eq 1 ]
       - uses: actions/setup-node@v4
         with:
           node-version: 22
