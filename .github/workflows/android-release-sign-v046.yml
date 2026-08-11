@@ -1,0 +1,126 @@
+name: Android Release Sign v0.4.6
+
+on:
+  push:
+    branches: ["release/android-signing-v0.4.6"]
+    paths:
+      - ".github/workflows/android-release-sign-v046.yml"
+      - ".github/release/farsiai-signing-backup-recipient.crt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sign-release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout signing metadata
+        uses: actions/checkout@v4
+
+      - name: Download verified v0.4.6 APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/9084151536/zip" \
+            --output "$RUNNER_TEMP/base-apk.zip"
+          unzip -q "$RUNNER_TEMP/base-apk.zip" -d "$RUNNER_TEMP/base-apk"
+          test -f "$RUNNER_TEMP/base-apk/app-release.apk"
+          echo "f7c62ccf9ad302ba381b6eb16db583fb7f5173b858c2cb162775bd4ea3282118  $RUNNER_TEMP/base-apk/app-release.apk" | sha256sum --check --status
+
+      - name: Generate one-time FarsiAI release signing key
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASS="$(openssl rand -hex 24)"
+          KEYSTORE="$RUNNER_TEMP/FarsiAI-Android-Release-v0.4.6.p12"
+          keytool -genkeypair -noprompt \
+            -storetype PKCS12 \
+            -keystore "$KEYSTORE" \
+            -alias farsiai \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 10000 \
+            -storepass "$PASS" \
+            -keypass "$PASS" \
+            -dname "CN=FarsiAI, OU=Release, O=FarsiAI, L=Baku, C=AZ"
+          printf '%s' "$PASS" > "$RUNNER_TEMP/signing-password.txt"
+          echo "keystore=$KEYSTORE" >> "$GITHUB_OUTPUT"
+
+      - name: Sign APK with dedicated release key
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASS="$(cat "$RUNNER_TEMP/signing-password.txt")"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" sign \
+            --ks "${{ steps.signing.outputs.keystore }}" \
+            --ks-type PKCS12 \
+            --ks-key-alias farsiai \
+            --ks-pass "pass:$PASS" \
+            --key-pass "pass:$PASS" \
+            --out "$RUNNER_TEMP/FarsiAI-Mobile-v0.4.6.apk" \
+            "$RUNNER_TEMP/base-apk/app-release.apk"
+
+      - name: Verify release signature and identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          "$APKSIGNER" verify --verbose --print-certs "$RUNNER_TEMP/FarsiAI-Mobile-v0.4.6.apk" | tee "$RUNNER_TEMP/apksigner-verify.txt"
+          grep -F "CN=FarsiAI" "$RUNNER_TEMP/apksigner-verify.txt"
+          if grep -F "Android Debug" "$RUNNER_TEMP/apksigner-verify.txt"; then
+            echo "Debug certificate unexpectedly present in final APK." >&2
+            exit 1
+          fi
+          sha256sum "$RUNNER_TEMP/FarsiAI-Mobile-v0.4.6.apk" | tee "$RUNNER_TEMP/final-apk-sha256.txt"
+
+      - name: Encrypt signing-key backup for private handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          BACKUP_DIR="$RUNNER_TEMP/signing-backup"
+          mkdir -p "$BACKUP_DIR"
+          cp "${{ steps.signing.outputs.keystore }}" "$BACKUP_DIR/FarsiAI-Android-Release-v0.4.6.p12"
+          PASS="$(cat "$RUNNER_TEMP/signing-password.txt")"
+          {
+            echo "FarsiAI Android release signing backup"
+            echo "Alias: farsiai"
+            echo "Store password: $PASS"
+            echo "Key password: $PASS"
+            echo "Package: ai.farsiai.app"
+            echo "IMPORTANT: Keep this file and the PKCS12 keystore private. Future APK/AAB updates must use the same key."
+          } > "$BACKUP_DIR/credentials.txt"
+          cp "$RUNNER_TEMP/apksigner-verify.txt" "$BACKUP_DIR/apksigner-verify.txt"
+          tar -C "$BACKUP_DIR" -czf "$RUNNER_TEMP/signing-backup.tar.gz" .
+          openssl cms -encrypt -aes256 -binary \
+            -in "$RUNNER_TEMP/signing-backup.tar.gz" \
+            -outform DER \
+            -out "$RUNNER_TEMP/FarsiAI-Android-Signing-Backup-v0.4.6.cms" \
+            .github/release/farsiai-signing-backup-recipient.crt
+          rm -rf "$BACKUP_DIR" "$RUNNER_TEMP/signing-backup.tar.gz" "$RUNNER_TEMP/signing-password.txt" "${{ steps.signing.outputs.keystore }}"
+
+      - name: Upload release-signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarsiAI-Mobile-Android-ReleaseSigned-v0.4.6
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/FarsiAI-Mobile-v0.4.6.apk
+            ${{ runner.temp }}/apksigner-verify.txt
+            ${{ runner.temp }}/final-apk-sha256.txt
+
+      - name: Upload encrypted signing backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: FarsiAI-Android-Signing-Backup-Encrypted-v0.4.6
+          if-no-files-found: error
+          path: ${{ runner.temp }}/FarsiAI-Android-Signing-Backup-v0.4.6.cms
