@@ -6,35 +6,7 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
-  sha_test_hotfix:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Apply one-shot SHA test alignment
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -f .github/scripts/fix_codex_sha_test.py ]; then
-            echo "SHA test patcher already consumed; nothing to do."
-            exit 0
-          fi
-          python .github/scripts/fix_codex_sha_test.py
-          git config user.name "FarsiAI Build Bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add apps/desktop/src-tauri/src/codex_broker.rs .github/scripts/fix_codex_sha_test.py
-          git diff --cached --check
-          git commit -m "test(codex): align derived SHA expectation"
-          git push origin HEAD:main
-
   typecheck:
     runs-on: ubuntu-latest
     steps:
