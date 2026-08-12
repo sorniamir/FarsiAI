@@ -1,5 +1,5 @@
 name: Desktop Windows
-# v0.5.2 final approval/SHA regression verification
+# v0.5.3 create-file / planner-repair regression verification
 
 on:
   push:
@@ -107,6 +107,29 @@ jobs:
           }
           Write-Host "Verified Codex approval/write lifecycle regression contract."
 
+      - name: Verify Codex create-file and invalid-tool repair regressions
+        shell: pwsh
+        run: |
+          $planner = Get-Content "apps/api/src/ai/codex-v2.ts" -Raw
+          $tests = Get-Content "apps/api/test/codex-v2.test.ts" -Raw
+          $badEmptyGuard = "typeof input.content !== 'string' || !input.content"
+          if ($planner -match [regex]::Escape($badEmptyGuard)) {
+            throw "Codex backend still rejects empty write_file content."
+          }
+          if ($planner -notmatch [regex]::Escape("codex_v2_invalid_tool_repair")) {
+            throw "Server-side invalid-tool repair loop is missing."
+          }
+          if ($planner -notmatch [regex]::Escape("MAY be an empty string")) {
+            throw "Planner repair guidance no longer permits an empty file."
+          }
+          if ($tests -notmatch [regex]::Escape("accepts an empty write_file payload when the task is to create an empty file")) {
+            throw "Empty-file creation regression test is missing."
+          }
+          if ($tests -notmatch [regex]::Escape("repairs an invalid model tool proposal before returning anything to the desktop")) {
+            throw "Invalid tool proposal repair regression test is missing."
+          }
+          Write-Host "Verified Codex create-file and planner-repair regression contract."
+
       - name: Test Codex planner regressions including v2
         run: npm run test:api
 
@@ -145,15 +168,15 @@ jobs:
           if ($joined -notmatch "farsiai.codex.desktop.v2") {
             throw "Codex Studio v2 marker was not embedded into the Windows production bundle."
           }
-          if ($joined -notmatch "0.5.2-codex-studio") {
-            throw "Codex Studio v0.5.2 client marker was not embedded into the Windows production bundle."
+          if ($joined -notmatch "0.5.3-codex-studio") {
+            throw "Codex Studio v0.5.3 client marker was not embedded into the Windows production bundle."
           }
-          Write-Host "Verified production API + Supabase + Codex v0.5.2 configuration in desktop bundle."
+          Write-Host "Verified production API + Supabase + Codex v0.5.3 configuration in desktop bundle."
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: FarsiAI-Desktop-Windows-v0.5.2-Codex-Approval-Fixed
+          name: FarsiAI-Desktop-Windows-v0.5.3-Codex-Create-File-Fixed
           if-no-files-found: error
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
