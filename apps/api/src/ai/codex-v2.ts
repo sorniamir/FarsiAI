@@ -4,7 +4,7 @@ import { resolveAuth } from '../lib/supabase-auth';
 import type { Env } from '../types';
 
 const PROTOCOL = 'farsiai.codex.desktop.v2';
-const MODELS = ['@cf/moonshotai/kimi-k2.7-code', '@cf/zai-org/glm-5.2', '@cf/zai-org/glm-4.7-flash'] as const;
+const MODELS = ['@cf/openai/gpt-oss-120b', '@cf/google/gemma-4-26b-a4b-it'] as const;
 const TOOL_NAMES = ['list_directory', 'read_file', 'search_files', 'write_file', 'create_directory', 'run_command', 'launch_app'] as const;
 const SIDE_EFFECTS = new Set(['write_file', 'create_directory', 'run_command', 'launch_app']);
 const SAFE_COMMANDS = new Set([
@@ -142,7 +142,9 @@ function parseObservations(value: unknown, offered: Set<ToolName>): Observation[
 function toolCallCandidate(result: any): any {
   const candidates = [result, result?.result, result?.data, result?.result?.result].filter(Boolean);
   for (const item of candidates) {
-    const call = item?.tool_calls?.[0] ?? item?.choices?.[0]?.message?.tool_calls?.[0];
+    const call = item?.tool_calls?.[0]
+      ?? item?.choices?.[0]?.message?.tool_calls?.[0]
+      ?? item?.output?.find?.((entry: any) => entry?.type === 'function_call');
     if (call) return call;
   }
   return null;
@@ -151,8 +153,18 @@ function toolCallCandidate(result: any): any {
 function responseText(result: any): string {
   const candidates = [result, result?.result, result?.data, result?.result?.result].filter(Boolean);
   for (const item of candidates) {
-    const text = item?.response ?? item?.choices?.[0]?.message?.content;
-    if (typeof text === 'string' && text.trim()) return sanitizeText(text, 9000).trim();
+    const direct = item?.response ?? item?.choices?.[0]?.message?.content ?? item?.output_text;
+    if (typeof direct === 'string' && direct.trim()) return sanitizeText(direct, 9000).trim();
+    if (Array.isArray(item?.output)) {
+      for (const entry of item.output) {
+        if (entry?.type !== 'message' || !Array.isArray(entry?.content)) continue;
+        for (const part of entry.content) {
+          if ((part?.type === 'output_text' || part?.type === 'text') && typeof part?.text === 'string' && part.text.trim()) {
+            return sanitizeText(part.text, 9000).trim();
+          }
+        }
+      }
+    }
   }
   return '';
 }
@@ -193,7 +205,8 @@ function normalizeToolCall(raw: unknown, offered: Set<ToolName>, appIds: Set<str
     if (!path || (name === 'create_directory' && path === '.')) return null;
     normalized = { path };
   }
-  const rawId = typeof call?.id === 'string' && /^[\w.:-]{1,160}$/.test(call.id) ? call.id : `call-${requestId}-${crypto.randomUUID()}`;
+  const candidateId = call?.id ?? call?.call_id;
+  const rawId = typeof candidateId === 'string' && /^[\w.:-]{1,160}$/.test(candidateId) ? candidateId : `call-${requestId}-${crypto.randomUUID()}`;
   return { callId: rawId, name, arguments: normalized };
 }
 
@@ -213,15 +226,45 @@ function systemPrompt(capabilities: Capability[], applications: Array<{ id: stri
   ].join('\n');
 }
 
+function compatibleModelInput(input: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...input };
+  delete next.parallel_tool_calls;
+  delete next.tool_choice;
+  if (typeof next.max_completion_tokens === 'number') {
+    next.max_tokens = next.max_completion_tokens;
+    delete next.max_completion_tokens;
+  }
+  return next;
+}
+
 async function runModel(env: Env, input: Record<string, unknown>, requireTool: boolean): Promise<{ result: any; model: string }> {
   let last: unknown;
   for (const model of MODELS) {
-    try {
-      const result = await env.AI.run(model, model === '@cf/zai-org/glm-5.2' ? { ...input, reasoning_effort: 'medium' } : input);
-      if (requireTool && !toolCallCandidate(result)) { last = new Error('required tool missing'); continue; }
-      if (!toolCallCandidate(result) && !responseText(result)) { last = new Error('empty model output'); continue; }
-      return { result, model };
-    } catch (error) { last = error; }
+    for (const compatibilityMode of [false, true]) {
+      try {
+        const modelInput = compatibilityMode ? compatibleModelInput(input) : input;
+        const result = await env.AI.run(model, modelInput);
+        const tool = toolCallCandidate(result);
+        if (requireTool && !tool) {
+          last = new Error('required tool missing');
+          continue;
+        }
+        if (!tool && !responseText(result)) {
+          last = new Error('empty model output');
+          continue;
+        }
+        console.log(JSON.stringify({ event: 'codex_v2_model_success', model, compatibilityMode, tool: Boolean(tool) }));
+        return { result, model };
+      } catch (error) {
+        last = error;
+        console.warn(JSON.stringify({
+          event: 'codex_v2_model_failed',
+          model,
+          compatibilityMode,
+          message: error instanceof Error ? error.message : 'unknown_model_error',
+        }));
+      }
+    }
   }
   throw last instanceof Error ? last : new Error('No Codex model is available.');
 }

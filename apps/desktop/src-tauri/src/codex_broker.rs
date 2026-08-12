@@ -499,4 +499,1852 @@ fn validate_workspace_root(root: &Path) -> Result<(), String> {
             lowered.as_str(),
             "windows" | "program files" | "program files (x86)" | "programdata" | "appdata" | ".ssh" | ".gnupg"
         ) {
-            ×½»öÚ$z{-®éÜj×VB6öÖÖæC¢¶W'&÷'Ò"’“ó°¢ÆWB7FF÷WBÒ6†–Æ@¢ç7FF÷W@¢çF¶R‚¢æöµö÷%öVÇ6R‡ÇÂ$6ææ÷B6GW&R6öÖÖæB7FF÷WBâ"çFõ÷7G&–ær‚’“ó°¢ÆWB7FFW'"Ò6†–Æ@¢ç7FFW' ¢çF¶R‚¢æöµö÷%öVÇ6R‡ÇÂ$6ææ÷B6GW&R6öÖÖæB7FFW'"â"çFõ÷7G&–ær‚’“ó°¢ÆWB7FF÷WE÷&VFW"ÒF‡&VC£§7vâ†Ö÷fRÇÂG&–åö&÷VæFVB‡7FF÷WB’“°¢ÆWB7FFW'%÷&VFW"ÒF‡&VC£§7vâ†Ö÷fRÇÂG&–åö&÷VæFVB‡7FFW'"’“° ¢ÆWB×WBF–ÖVEö÷WBÒfÇ6S°¢ÆWB×WB6æ6VÆÆVBÒfÇ6S°¢ÆWBW†—E÷7FGW2ÒÆö÷°¢–b6æ6VÂæÆöB„÷&FW&–æs£¤7V—&R’°¢6æ6VÆÆVBÒG'VS°¢FW&Ö–æFU÷&ö6W75÷G&VR‚f×WB6†–ÆB“°¢'&V²6†–ÆBçv—B‚’æö²‚“°¢Ğ¢–b7F'FVBæVÆ6VB‚’ãÒGW&F–öã£¦g&öÕöÖ–ÆÆ—2‡F–ÖV÷WEö×2’°¢F–ÖVEö÷WBÒG'VS°¢FW&Ö–æFU÷&ö6W75÷G&VR‚f×WB6†–ÆB“°¢'&V²6†–ÆBçv—B‚’æö²‚“°¢Ğ¢ÖF6‚6†–ÆBçG'•÷v—B‚’°¢ö²…6öÖR‡7FGW2’’Óâ'&V²6öÖR‡7FGW2’À¢ö²„æöæR’ÓâF‡&VC£§6ÆVW„GW&F–öã£¦g&öÕöÖ–ÆÆ—2ƒ#R’’À¢W'"†W'&÷"’Óâ°¢FW&Ö–æFU÷&ö6W75÷G&VR‚f×WB6†–ÆB“°¢ÆWBòÒ6†–ÆBçv—B‚“°¢&WGW&âW'"†f÷&ÖB‚$6ææ÷BÖöæ—F÷"&÷fVB6öÖÖæC¢¶W'&÷'Ò"’“°¢Ğ¢Ğ¢Ó° ¢ÆWB‡7FF÷WBÂ7FF÷WE÷G'Væ6FVB’Ò7FF÷WE÷&VFW ¢æ¦ö–â‚¢æÖöW'"‡Å÷Â'7FF÷WB6GW&Rv÷&¶W"f–ÆVBâ"çFõ÷7G&–ær‚’“ó°¢ÆWB‡7FFW'"Â7FFW'%÷G'Væ6FVB’Ò7FFW'%÷&VFW ¢æ¦ö–â‚¢æÖöW'"‡Å÷Â'7FFW'"6GW&Rv÷&¶W"f–ÆVBâ"çFõ÷7G&–ær‚’“ó°¢ÆWB×WB7FF÷WBÒ7G&–æs£¦g&öÕ÷WFc…öÆ÷77’‚g7FF÷WB’çFõ÷7G&–ær‚“°¢ÆWB×WB7FFW'"Ò7G&–æs£¦g&öÕ÷WFc…öÆ÷77’‚g7FFW'"’çFõ÷7G&–ær‚“°¢–b7FF÷WE÷G'Væ6FVB°¢7FF÷WBçW6…÷7G"‚%Æâââå·7FF÷WBG'Væ6FVB'’f'6”’6öFW…Ò"“°¢Ğ¢–b7FFW'%÷G'Væ6FVB°¢7FFW'"çW6…÷7G"‚%Æâââå·7FFW'"G'Væ6FVB'’f'6”’6öFW…Ò"“°¢Ğ¢ö²„6öÖÖæDW†V7WF–öå&W7VÇB°¢'Våö–BÀ¢&öw&ÒÀ¢W†V7WF&ÆU÷Fƒ¢F…öf÷%öF—7Æ’‚fW†V7WF&ÆR’À¢7FF÷WBÀ¢7FFW'"À¢W†—Eö6öFS¢W†—E÷7FGW2ææE÷F†Vâ‡Ç7FGW7Â7FGW2æ6öFR‚’’À¢GW&F–öåö×3¢7F'FVBæVÆ6VB‚’æ5öÖ–ÆÆ—2‚’çG'•ö–çFò‚’çVçw&ö÷"‡ScC£¤Ô‚’À¢F–ÖVEö÷WBÀ¢6æ6VÆÆVBÀ¢÷WGWE÷G'Væ6FVC¢7FF÷WE÷G'Væ6FVBÇÂ7FFW'%÷G'Væ6FVBÀ¢Ò§Ğ ¢5·FW&“£¦6öÖÖæB‡&VæÖUöÆÂÒ&6ÖVÄ66R"•Ğ§V"7–æ2fâ6öFW…÷'Våö6öÖÖæB€¢v÷&·76Uö–C¢7G&–ærÀ¢'Våö–C¢7G&–ærÀ¢&öw&Ó¢7G&–ærÀ¢&w3¢fV3Å7G&–æsâÀ¢7vC¢÷F–öãÅ7G&–æsâÀ¢F–ÖV÷WEö×3¢÷F–öãÇScCâÀ¢&V6öã¢÷F–öãÅ7G&–æsâÀ¢¢†æFÆRÀ¢7FFS¢7FFSÂuòÂ6öFW…7FFSâÀ¢’Óâ&W7VÇCÄ6öÖÖæDW†V7WF–öå&W7VÇBÂ7G&–æsâ°¢fÆ–FFU÷'Våö–B‚g'Våö–B“ó°¢ÆWBæ÷&ÖÆ—¦VE÷&öw&ÒÒ&öw&ÒçG&–Ò‚’çFõö66–•öÆ÷vW&66R‚“°¢–bæ÷&ÖÆ—¦VE÷&öw&ÒÒ&öw&ÒçG&–Ò‚¢ÇÂæ÷&ÖÆ—¦VE÷&öw&Òæ—5öV×G’‚¢ÇÂæ÷&ÖÆ—¦VE÷&öw&Ğ¢æ'—FW2‚¢æÆÂ‡ÇfÇVWÂfÇVRæ—5ö66–•öÆ÷vW&66R‚’ÇÂfÇVRæ—5ö66–•öF–v—B‚’¢°¢&WGW&âW'"‚%&öw&Ò×W7B&RâW†7BÆ÷vW&66RW†V7WF&ÆR&öf–ÆRæÖRâ"çFõ÷7G&–ær‚’“°¢Ğ¢ÆWB&öf–ÆRÒ&öw&Õ÷&öf–ÆR‚fæ÷&ÖÆ—¦VE÷&öw&Ò¢æöµö÷%öVÇ6R‡ÇÂ%&öw&Ò—2æ÷B–âF†R6öFW‚6öÖÖæB&öf–ÆRÆÆ÷vÆ—7Bâ"çFõ÷7G&–ær‚’“ó°¢ÆWBw&çBÒvWE÷v÷&·76R‚g7FFRÂgv÷&·76Uö–B“ó°¢fÆ–FFUö6öÖÖæE÷&öf–ÆR‚g&öf–ÆRÂf&w2Âfw&çB“ó°¢ÆWB&WVW7FVEö7vBÒ7vBçVçw&ö÷%öFVfVÇB‚“°¢ÆWB‡v÷&¶–æuöF—&V7F÷'’Âæ÷&ÖÆ—¦VEö7vB’Ğ¢&W6öÇfUöW†—7F–ær‚fw&çBÂg&WVW7FVEö7vBÂG'VR“ó°¢–bv÷&¶–æuöF—&V7F÷'’æ—5öF—"‚’°¢&WGW&âW'"‚$6öÖÖæBv÷&¶–ærF—&V7F÷'’—2æ÷BF—&V7F÷'’â"çFõ÷7G&–ær‚’“°¢Ğ¢ÆWBF–ÖV÷WEö×2ÒF–ÖV÷WEö×2çVçw&ö÷"ƒ#ó“°¢–b„Ô”åô4ôÔÔäEõD”ÔTõUEôÕ2âãÔÔ…ô4ôÔÔäEõD”ÔTõUEôÕ2’æ6öçF–ç2‚gF–ÖV÷WEö×2’°¢&WGW&âW'"†f÷&ÖB€¢'F–ÖV÷WD×2×W7B&R&WGvVVâ´Ô”åô4ôÔÔäEõD”ÔTõUEôÕ7ÒæB´Ô…ô4ôÔÔäEõD”ÔTõUEôÕ7Òâ ¢’“°¢Ğ¢ÆWBW†V7WF&ÆRÒ&W6öÇfUöW†V7WF&ÆR‚g&öf–ÆRÂfw&çBç&ö÷B“ó°¢ÆWBw&W"ÒW†V7WF&ÆP¢æW‡FVç6–öâ‚¢ææE÷F†Vâ‡ÇfÇVWÂfÇVRçFõ÷7G"‚’¢æ—5÷6öÖUöæB‡ÆW‡FVç6–öçÂ°¢W‡FVç6–öâæWö–væ÷&Uö66–•ö66R‚&6ÖB"’ÇÂW‡FVç6–öâæWö–væ÷&Uö66–•ö66R‚&&B"¢Ò“°¢fÆ–FFU÷&ö6W75ö&w2‚f&w2Âw&W"“ó°¢ÆWBW†V7WF&ÆUöÖWFFFÒg3£¦ÖWFFF‚fW†V7WF&ÆR¢æÖöW'"‡ÆW'&÷'Âf÷&ÖB‚$6ææ÷B–ç7V7B&÷fVBW†V7WF&ÆS¢¶W'&÷'Ò"’“ó°¢ÆWBW†V7WF&ÆUö–FVçF—G’Ò†W†V7WF&ÆUöÖWFFFæÆVâ‚’ÂÖöF–f–VEö×2‚fW†V7WF&ÆUöÖWFFF’“°¢ÆWB&w5÷&Wf–WrÒ–b&w2æ—5öV×G’‚’°¢"ŠŠı˜˜bŠ-‹ªı˜˜]Š}˜b’"çFõ÷7G&–ær‚¢ÒVÇ6R°¢&w2æ—FW"‚¢æÖ‡ÇfÇVWÂ6VEöFWF–Â‡fÇVR’¢æ6öÆÆV7C££ÅfV3Åóãâ‚¢æ¦ö–â‚""¢Ó°¢ÆWB&V6öâÒ&V6öà¢æf–ÇFW"‡ÇfÇVWÂfÇVRçG&–Ò‚’æ—5öV×G’‚’¢æÖ†6VEöFWF–Â¢çVçw&ö÷%öVÇ6R‡ÇÂ-Š‹‹‹=¸Â¸ÍŠrŠ­‹=Š¢›í‹˜©˜rŠ­˜‹=‹r6öFW‚"çFõ÷7G&–ær‚’“°¢–bæF—fUö6öæf—&Ò€¢fÀ¢$f'6”’6öFW‚(	BŠ­Š=¸Í¸ÍŠòŠ}ŠÍ‹Š}¸ÂŠı‹=Š­˜‹"À¢f÷&ÖB€¢$6öFW‚˜]¸Î(ÍŠí˜Š}˜}Šò¸Íª’Šı‹=Š­˜‹ª˜mŠ­‹˜N(Í‹MŠı˜rŠ}ŠÍ‹Šrª˜mŠó¥ÆåÆí›í‹˜˜Š}¸Í˜C¢·ÕÆí˜Š}¸Í˜BŠ}ŠÍ‹Š}¸Í¸Ã¢·ÕÆí›í˜‹M˜s¢·ÕÆíŠ-‹ªı˜˜]Š}˜n(Í˜}Šs¢·ÕÆí˜]˜}˜MŠ£¢·ÒŠ½Š}˜m¸Í˜uÆíŠı˜M¸Í˜C¢·ÕÆåÆí›í˜‹=Š­˜}™BŠ-‹-Š}Šò˜‚˜‹˜Šı¸ÂŠ­‹Š}˜]˜M¸Â‹­¸Í‹˜‹Š}˜BŠ}‹=Š¢â"À¢&öf–ÆRæÆ&VÂÀ¢F…öf÷%öF—7Æ’‚fW†V7WF&ÆR’À¢æ÷&ÖÆ—¦U÷&VÆF—fUöf÷%÷&W7VÇB‚fæ÷&ÖÆ—¦VEö7vB’À¢&w5÷&Wf–WrÀ¢F–ÖV÷WEö×2òóÀ¢&V6öà¢’À¢’°¢W6…öVF—B€¢g7FFRÀ¢&6öÖÖæBç'Vâ"À¢&6æ6VÆÆVB"À¢6öÖR‚gv÷&·76Uö–B’À¢6öÖR‚fæ÷&ÖÆ—¦VE÷&öw&Ò’À¢6öÖR†f÷&ÖB‚''Vâ·'Våö–GÒ"’’À¢“°¢&WGW&âW'"‚$6öÖÖæBW†V7WF–öâv26æ6VÆÆVB'’F†RW6W"â"çFõ÷7G&–ær‚’“°¢Ğ ¢ÆWB6æöæ–6ÅöW†V7WF&ÆRÒg3£¦6æöæ–6Æ—¦R‚fW†V7WF&ÆR¢æÖöW'"‡Å÷Â$W†V7WF&ÆRF—6V&VBv†–ÆRW&Ö—76–öâv2&V–ær6öæf—&ÖVBâ"çFõ÷7G&–ær‚’“ó°¢ÆWB&Vg&W6†VEöÖWFFFÒg3£¦ÖWFFF‚f6æöæ–6ÅöW†V7WF&ÆR¢æÖöW'"‡ÆW'&÷'Âf÷&ÖB‚$6ææ÷B&RÖ6†V6²&÷fVBW†V7WF&ÆS¢¶W'&÷'Ò"’“ó°¢–b6æöæ–6ÅöW†V7WF&ÆRÒW†V7WF&ÆP¢ÇÂ‡&Vg&W6†VEöÖWFFFæÆVâ‚’ÂÖöF–f–VEö×2‚g&Vg&W6†VEöÖWFFF’’ÒW†V7WF&ÆUö–FVçF—G¢°¢&WGW&âW'"‚$W†V7WF&ÆR6†ævVBv†–ÆRW&Ö—76–öâv2&V–ær6öæf—&ÖVC²'Vâ&÷'FVBâ"çFõ÷7G&–ær‚’“°¢Ğ¢ÆWB&Vg&W6†VEö7vBÒg3£¦6æöæ–6Æ—¦R‚gv÷&¶–æuöF—&V7F÷'’¢æÖöW'"‡Å÷Â%v÷&¶–ærF—&V7F÷'’F—6V&VB&Vf÷&R6öÖÖæBW†V7WF–öââ"çFõ÷7G&–ær‚’“ó°¢Vç7W&Uö6öçF–æVB‚fw&çBç&ö÷BÂg&Vg&W6†VEö7vB“ó° ¢ÆWB6æ6VÂÒ&3£¦æWr„FöÖ–4&ööÃ£¦æWr†fÇ6R’“°¢°¢ÆWB×WB'Vç2Ò7FFRç'Vç2æÆö6²‚’æÖöW'"‡Å÷ÂÆö6µöW'&÷"‚$6öÖÖæB'Vâ"’“ó°¢–b'Vç2æ6öçF–ç5ö¶W’‚g'Våö–B’°¢&WGW&âW'"‚''Vä–B—2Ç&VG’7F—fRâ"çFõ÷7G&–ær‚’“°¢Ğ¢'Vç2æ–ç6W'B€¢'Våö–Bæ6ÆöæR‚’À¢7F—fU'Vâ°¢6æ6VÃ¢6æ6VÂæ6ÆöæR‚’À¢ÒÀ¢“°¢Ğ¢W6…öVF—B€¢g7FFRÀ¢&6öÖÖæBç'Vâ"À¢'7F'FVB"À¢6öÖR‚gv÷&·76Uö–B’À¢6öÖR‚fæ÷&ÖÆ—¦VE÷&öw&Ò’À¢6öÖR†f÷&ÖB‚''Vâ·'Våö–GÒ"’’À¢“° ¢ÆWBv÷&¶W%÷'Våö–BÒ'Våö–Bæ6ÆöæR‚“°¢ÆWBv÷&¶W%÷&öw&ÒÒæ÷&ÖÆ—¦VE÷&öw&Òæ6ÆöæR‚“°¢ÆWBv÷&¶W%öW†V7WF&ÆRÒW†V7WF&ÆRæ6ÆöæR‚“°¢ÆWB&W7VÇBÒFW&“£¦7–æ5÷'VçF–ÖS£§7våö&Æö6¶–ær†Ö÷fRÇÂ°¢W†V7WFUö6öÖÖæE÷&ö6W72€¢v÷&¶W%÷'Våö–BÀ¢v÷&¶W%÷&öw&ÒÀ¢v÷&¶W%öW†V7WF&ÆRÀ¢&w2À¢&Vg&W6†VEö7vBÀ¢F–ÖV÷WEö×2À¢6æ6VÂÀ¢¢Ò¢æv—@¢æÖöW'"‡ÆW'&÷'Âf÷&ÖB‚$6öÖÖæBv÷&¶W"f–ÆVC¢¶W'&÷'Ò"’“°¢–bÆWBö²†×WB'Vç2’Ò7FFRç'Vç2æÆö6²‚’°¢'Vç2ç&VÖ÷fR‚g'Våö–B“°¢Ğ¢ÆWB&W7VÇBÒ&W7VÇCóó°¢ÆWB÷WF6öÖRÒ–b&W7VÇBæ6æ6VÆÆVB°¢&6æ6VÆÆVB ¢ÒVÇ6R–b&W7VÇBçF–ÖVEö÷WB°¢'F–ÖVEö÷WB ¢ÒVÇ6R–b&W7VÇBæW†—Eö6öFRÓÒ6öÖRƒ’°¢&6ö×ÆWFVB ¢ÒVÇ6R°¢&f–ÆVB ¢Ó°¢W6…öVF—B€¢g7FFRÀ¢&6öÖÖæBç'Vâ"À¢÷WF6öÖRÀ¢6öÖR‚gv÷&·76Uö–B’À¢6öÖR‚fæ÷&ÖÆ—¦VE÷&öw&Ò’À¢6öÖR†f÷&ÖB€¢''Vâ·'Våö–GÒÂW†—B³£÷ÒÂ·Ò×2"À¢&W7VÇBæW†—Eö6öFRÂ&W7VÇBæGW&F–öåö×0¢’’À¢“°¢ö²‡&W7VÇB§Ğ ¢5·FW&“£¦6öÖÖæB‡&VæÖUöÆÂÒ&6ÖVÄ66R"•Ğ§V"fâ6öFW…ö6æ6VÅ÷'Vâ€¢'Våö–C¢7G&–ærÀ¢7FFS¢7FFSÂuòÂ6öFW…7FFSâÀ¢’Óâ&W7VÇCÄ6æ6VÅ'Vå&W7VÇBÂ7G&–æsâ°¢fÆ–FFU÷'Våö–B‚g'Våö–B“ó°¢ÆWBf÷VæBÒ°¢ÆWB'Vç2Ò7FFRç'Vç2æÆö6²‚’æÖöW'"‡Å÷ÂÆö6µöW'&÷"‚$6öÖÖæB'Vâ"’“ó°¢–bÆWB6öÖR†7F—fR’Ò'Vç2ævWB‚g'Våö–B’°¢7F—fRæ6æ6VÂç7F÷&R‡G'VRÂ÷&FW&–æs£¥&VÆV6R“°¢G'VP¢ÒVÇ6R°¢fÇ6P¢Ğ¢Ó°¢W6…öVF—B€¢g7FFRÀ¢&6öÖÖæBæ6æ6VÂ"À¢–bf÷VæB²'&WVW7FVB"ÒVÇ6R²&æ÷Eöf÷VæB"ÒÀ¢æöæRÀ¢6öÖR‚g'Våö–B’À¢æöæRÀ¢“°¢ö²„6æ6VÅ'Vå&W7VÇB²'Våö–BÂf÷VæBÒ§Ğ ¢5·FW&“£¦6öÖÖæB‡&VæÖUöÆÂÒ&6ÖVÄ66R"•Ğ§V"fâ6öFW…öÆ—7EöVF—B€¢Æ–Ö—C¢÷F–öãÇW6—¦SâÀ¢7FFS¢7FFSÂuòÂ6öFW…7FFSâÀ¢’Óâ&W7VÇCÅfV3ÄVF—DWfVçCâÂ7G&–æsâ°¢ÆWBÆ–Ö—BÒÆ–Ö—BçVçw&ö÷"ƒ“°¢–bÆ–Ö—BÓÒÇÂÆ–Ö—BâÔ…ôTD•EôUdTåE2°¢&WGW&âW'"†f÷&ÖB‚&Æ–Ö—B×W7B&R&WGvVVâæB´Ô…ôTD•EôUdTåE7Òâ"’“°¢Ğ¢ÆWBWfVçG2Ò7FFRæVF—BæÆö6²‚’æÖöW'"‡Å÷ÂÆö6µöW'&÷"‚$VF—B"’“ó°¢ö²†WfVçG2æ—FW"‚’ç&Wb‚’çF¶R†Æ–Ö—B’æ6ÆöæVB‚’æ6öÆÆV7B‚’§Ğ ¢5¶6fr‡FW7B•Ğ¦ÖöBFW7G2°¢W6R7WW#£¢£° ¢fâFV×÷&'•÷v÷&·76R†Æ&VÃ¢g7G"’ÓâF„'Vb°¢ÆWBF‚ÒVçc£§FV×öF—"‚’æ¦ö–â†f÷&ÖB‚&f'6–’Ö6öFW‚Ö'&ö¶W"×¶Æ&VÇÒ×·Ò"ÂæWuö–B‚'FW7B"’’“°¢g3£¦7&VFUöF—%öÆÂ‚gF‚’æW‡V7B‚&7&VFRFV×÷&'’v÷&·76R"“°¢g3£¦6æöæ–6Æ—¦R‡F‚’æW‡V7B‚&6æöæ–6ÂFV×÷&'’v÷&·76R"¢Ğ ¢5·FW7EĞ¢fâ&VÆF—fU÷F…÷&V¦V7G5öÆÅ÷G&fW'6ÅöæEö'6öÇWFUöf÷&×2‚’°¢f÷"&Æö6¶VB–â°¢"ââö÷WG6–FRçG‡B"À¢'6fRòââòââö÷WG6–FRçG‡B"À¢"'6fUÂâåÆ÷WG6–FRçG‡B"À¢"$3¥Æ÷WG6–FRçG‡B"À¢"%ÅÇ6W'fW%Ç6†&UÆf–ÆRçG‡B"À¢"öWF2÷77vB"À¢'6fRòöf–ÆRçG‡B"À¢"'6fUÅÆf–ÆRçG‡B"À¢Ò°¢76W'B€¢fÆ–FFU÷&VÆF—fU÷F‚†&Æö6¶VBÂfÇ6R’æ—5öW'"‚’À¢&×W7B&V¦V7B¶&Æö6¶VC£÷Ò ¢“°¢Ğ¢76W'B‡fÆ–FFU÷&VÆF—fU÷F‚‚'7&2ö6ö×öæVçG2ôçG7‚"ÂfÇ6R’æ—5öö²‚’“°¢Ğ ¢5·FW7EĞ¢fâ&VÆF—fU÷F…÷&V¦V7G5öçFg5öÇFW&æFUöFF÷7G&V×2‚’°¢f÷"&Æö6¶VB–â²&æ÷FW2çG‡C§–ÆöB"Â&föÆFW"öf–ÆRæ§3¢DDD"Â&¦#¦2%Ò°¢ÆWBW'&÷"ÒfÆ–FFU÷&VÆF—fU÷F‚†&Æö6¶VBÂfÇ6R’æW‡V7EöW'"‚$E2×W7B&R&V¦V7FVB"“°¢76W'B†W'&÷"æ6öçF–ç2‚$E2"’ÇÂW'&÷"æ6öçF–ç2‚&G&—fR"’“°¢Ğ¢Ğ ¢5·FW7EĞ¢fâ&VÆF—fU÷F…÷&V¦V7G5÷v–æF÷w5öFWf–6UöæÖW5öæEöÆ–6W2‚’°¢f÷"&Æö6¶VB–â°¢$4ôâ"À¢&6öâçG‡B"À¢&föÆFW"ôU‚æ§6öâ"À¢$åTÂ"À¢$4ôÓæÆör"À¢&ÇC’"À¢$4Äô4²B"À¢&F—"ô4ôäõUBBçG‡B"À¢Ò°¢76W'B€¢fÆ–FFU÷&VÆF—fU÷F‚†&Æö6¶VBÂfÇ6R’æ—5öW'"‚’À¢&×W7B&V¦V7Bv–æF÷w2FWf–6R¶&Æö6¶VC£÷Ò ¢“°¢Ğ¢76W'B‡fÆ–FFU÷&VÆF—fU÷F‚‚&6ö×ç’çG‡B"ÂfÇ6R’æ—5öö²‚’“°¢76W'B‡fÆ–FFU÷&VÆF—fU÷F‚‚&6öÓçG‡B"ÂfÇ6R’æ—5öö²‚’“°¢Ğ ¢5·FW7EĞ¢fâ6V7&WE÷F‡5ö&Uö&Æö6¶VEö'WE÷FV×ÆFW5÷&VÖ–å÷&VF&ÆR‚’°¢f÷"&Æö6¶VB–â°¢"æVçb"À¢"æVçbç&öGV7F–öâ"À¢"ç76‚ö–EöVC#SS’"À¢&6öæf–rö7&VFVçF–Ç2æ§6öâ"À¢"æv—Bö6öæf–r"À¢&6W'F–f–6FW2÷6W'fW"çVÒ"À¢'&—fFR÷6–væ–æræ¶W’"À¢Ò°¢76W'B€¢fÆ–FFU÷&VÆF—fU÷F‚†&Æö6¶VBÂfÇ6R’æ—5öW'"‚’À¢&×W7B&V¦V7B6V7&WBF‚¶&Æö6¶VC£÷Ò ¢“°¢Ğ¢76W'B‡fÆ–FFU÷&VÆF—fU÷F‚‚"æVçbæW†×ÆR"ÂfÇ6R’æ—5öö²‚’“°¢76W'B‡fÆ–FFU÷&VÆF—fU÷F‚‚&Fö72ö7&VFVçF–Ç2ÖwV–FRæÖB"ÂfÇ6R’æ—5öö²‚’“°¢Ğ ¢5·FW7EĞ¢fâW‡V7FVE÷6†#SeöFWFV7G5÷7FÆUöæEöÖ—76–æu÷fW'6–öç2‚’°¢ÆWB÷&–v–æÂÒ"&÷&–v–æÂ6öçFVçB#°¢ÆWB7GVÂÒ6†#Seö'—FW2†÷&–v–æÂ“°¢76W'EöW€¢fW&–g•öW‡V7FVEö†6‚…6öÖR†÷&–v–æÂ’Â6öÖR‚f7GVÂ’’æW‡V7B‚&ÖF6†–ær†6‚"’À¢6öÖR†7GVÂ¢“°¢76W'B‡fW&–g•öW‡V7FVEö†6‚…6öÖR†÷&–v–æÂ’ÂæöæR’æ—5öW'"‚’“°¢76W'B‡fW&–g•öW‡V7FVEö†6‚…6öÖR†÷&–v–æÂ’Â6öÖR‚b#"ç&WVBƒcB’’’æ—5öW'"‚’“°¢76W'B‡fW&–g•öW‡V7FVEö†6‚„æöæRÂ6öÖR‚g6†#Seö'—FW2†"&Ö—76–ær"’’’æ—5öW'"‚’“°¢76W'EöW‡fW&–g•öW‡V7FVEö†6‚„æöæRÂæöæR’æW‡V7B‚&æWrf–ÆR"’ÂæöæR“°¢Ğ ¢5·FW7EĞ¢fâ×WFF–öå÷&W6öÇWF–öåö6ææ÷EöÆVfU÷F†Uöw&çFVE÷v÷&·76R‚’°¢ÆWB&ö÷BÒFV×÷&'•÷v÷&·76R‚&6öçF–æÖVçB"“°¢ÆWB÷WG6–FRÒFV×÷&'•÷v÷&·76R‚&÷WG6–FR"“°¢ÆWBw&çBÒv÷&·76Tw&çB°¢–C¢'w5÷FW7Eöw&çB"çFõ÷7G&–ær‚’À¢&ö÷C¢&ö÷Bæ6ÆöæR‚’À¢æÖS¢'FW7B"çFõ÷7G&–ær‚’À¢w&çFVEöEö×3¢æ÷uö×2‚’À¢Ó°¢ÆWBÆÆ÷vVBÒ&W6öÇfUö×WFF–öå÷F&vWB‚fw&çBÂ&–ç6–FRçG‡B"’æW‡V7B‚&–ç6–FRF&vWB"“°¢76W'B†ÆÆ÷vVBãç7F'G5÷v—F‚‚g&ö÷B’“°¢76W'B†Vç7W&Uö6öçF–æVB‚g&ö÷BÂf÷WG6–FR’æ—5öW'"‚’“°¢g3£§&VÖ÷fUöF—%öÆÂ‡&ö÷B’æW‡V7B‚&6ÆVçW&ö÷B"“°¢g3£§&VÖ÷fUöF—%öÆÂ†÷WG6–FR’æW‡V7B‚&6ÆVçW÷WG6–FR"“°¢Ğ ¢5·FW7EĞ¢fâFöÖ–6—6…÷w&—FU÷&WÆ6W5ö6öçFVçE÷v—F†÷WE÷7Fv–æuöf–ÆW2‚’°¢ÆWB&ö÷BÒFV×÷&'•÷v÷&·76R‚&FöÖ–2"“°¢ÆWBF&vWBÒ&ö÷Bæ¦ö–â‚&f–ÆRçG‡B"“°¢g3£§w&—FR‚gF&vWBÂ&&Vf÷&R"’æW‡V7B‚'6VVBf–ÆR"“°¢w&—FUöFöÖ–6—6‚‚gF&vWBÂ"&gFW""Â'Væ—B×FW7B"’æW‡V7B‚&FöÖ–2&WÆ6VÖVçB"“°¢76W'EöW†g3£§&VE÷Fõ÷7G&–ær‚gF&vWB’æW‡V7B‚'&VBF&vWB"’Â&gFW""“°¢76W'B‚&ö÷Bæ¦ö–â‚"æf'6–’Ö6öFW‚×Væ—B×FW7BææWr"’æW†—7G2‚’“°¢76W'B‚&ö÷Bæ¦ö–â‚"æf'6–’Ö6öFW‚×Væ—B×FW7BæöÆB"’æW†—7G2‚’“°¢g3£§&VÖ÷fUöF—%öÆÂ‡&ö÷B’æW‡V7B‚&6ÆVçW"“°¢Ğ ¢5·FW7EĞ¢fâ6öÖÖæE÷'Våö–G5ö&U÷7G&–7EöæE÷67&—E÷&öf–ÆW5÷&V¦V7Eö–æÆ–æUö6öFR‚’°¢76W'B‡fÆ–FFU÷'Våö–B‚''Våó#3CScs‚"’æ—5öö²‚’“°¢76W'B‡fÆ–FFU÷'Våö–B‚'6†÷'B"’æ—5öW'"‚’“°¢76W'B‡fÆ–FFU÷'Våö–B‚''Vâ†276W2"’æ—5öW'"‚’“° ¢ÆWB&ö÷BÒFV×÷&'•÷v÷&·76R‚&6öÖÖæB×&öf–ÆR"“°¢ÆWBw&çBÒv÷&·76Tw&çB°¢–C¢'w5ö6öÖÖæE÷FW7B"çFõ÷7G&–ær‚’À¢&ö÷C¢&ö÷Bæ6ÆöæR‚’À¢æÖS¢'FW7B"çFõ÷7G&–ær‚’À¢w&çFVEöEö×3¢æ÷uö×2‚’À¢Ó°¢ÆWBæöFRÒ&öw&Õ÷&öf–ÆR‚&æöFR"’æW‡V7B‚&æöFR&öf–ÆR"“°¢76W'B‡fÆ–FFUö6öÖÖæE÷&öf–ÆR‚fæöFRÂe²"ÖR"çFõ÷7G&–ær‚’Â'&ö6W72æW†—B‚’"çFõ÷7G&–ær‚•ÒÂfw&çB’æ—5öW'"‚’“°¢ÆWBv—BÒ&öw&Õ÷&öf–ÆR‚&v—B"’æW‡V7B‚&v—B&öf–ÆR"“°¢76W'B‡fÆ–FFUö6öÖÖæE÷&öf–ÆR‚fv—BÂe²&6ÆVâ"çFõ÷7G&–ær‚’Â"ÖfG‚"çFõ÷7G&–ær‚•ÒÂfw&çB’æ—5öW'"‚’“°¢76W'B‡fÆ–FFUö6öÖÖæE÷&öf–ÆR‚fv—BÂe²'7FGW2"çFõ÷7G&–ær‚•ÒÂfw&çB’æ—5öö²‚’“°¢g3£§&VÖ÷fUöF—%öÆÂ‡&ö÷B’æW‡V7B‚&6ÆVçW"“°¢Ğ§Ğ
+            return Err("System and credential directories cannot be used as a Codex workspace.".to_string());
+        }
+    }
+
+    for variable in ["USERPROFILE", "WINDIR", "PROGRAMFILES", "PROGRAMDATA", "APPDATA", "LOCALAPPDATA"] {
+        let Some(value) = env::var_os(variable) else {
+            continue;
+        };
+        let Ok(protected) = fs::canonicalize(value) else {
+            continue;
+        };
+        if root == protected || (matches!(variable, "APPDATA" | "LOCALAPPDATA") && root.starts_with(&protected)) {
+            return Err("Select a project folder instead of a protected user or system directory.".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn verify_expected_hash(existing: Option<&[u8]>, expected: Option<&str>) -> Result<Option<String>, String> {
+    match existing {
+        Some(bytes) => {
+            let actual = sha256_bytes(bytes);
+            let supplied = expected
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "expectedSha256 is required when replacing an existing file.".to_string())?;
+            if supplied.len() != 64 || !supplied.bytes().all(|value| value.is_ascii_hexdigit()) {
+                return Err("expectedSha256 must be a 64-character SHA-256 value.".to_string());
+            }
+            if !actual.eq_ignore_ascii_case(supplied) {
+                return Err(format!(
+                    "File changed since it was read (SHA-256 conflict; current hash is {actual})."
+                ));
+            }
+            Ok(Some(actual))
+        }
+        None => {
+            if expected.is_some_and(|value| !value.trim().is_empty()) {
+                return Err("File does not exist, but an existing-file SHA-256 was supplied.".to_string());
+            }
+            Ok(None)
+        }
+    }
+}
+
+fn native_confirm(app: &AppHandle, title: &str, message: impl Into<String>) -> bool {
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Ø§Ø¬Ø§Ø²Ù‡ Ù…ÛŒâ€ŒØ¯Ù‡Ù…".to_string(),
+            "Ù„ØºÙˆ".to_string(),
+        ))
+        .blocking_show()
+}
+
+fn backup_root(app: &AppHandle, workspace_id: &str) -> Result<PathBuf, String> {
+    let root = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| format!("Cannot locate protected backup storage: {error}"))?
+        .join("codex-backups")
+        .join(workspace_id);
+    fs::create_dir_all(&root)
+        .map_err(|error| format!("Cannot create protected backup storage: {error}"))?;
+    Ok(root)
+}
+
+fn create_external_backup(
+    app: &AppHandle,
+    workspace_id: &str,
+    change_id: &str,
+    source: &Path,
+) -> Result<PathBuf, String> {
+    let destination = backup_root(app, workspace_id)?.join(format!("{change_id}.bak"));
+    fs::copy(source, &destination)
+        .map_err(|error| format!("Cannot create undo backup: {error}"))?;
+    if let Ok(file) = File::open(&destination) {
+        let _ = file.sync_all();
+    }
+    Ok(destination)
+}
+
+fn sibling_temp_path(target: &Path, token: &str, suffix: &str) -> Result<PathBuf, String> {
+    let parent = target
+        .parent()
+        .ok_or_else(|| "Target has no parent directory.".to_string())?;
+    Ok(parent.join(format!(".farsiai-codex-{token}.{suffix}")))
+}
+
+fn write_atomicish(target: &Path, bytes: &[u8], token: &str) -> Result<(), String> {
+    let temporary = sibling_temp_path(target, token, "new")?;
+    let displaced = sibling_temp_path(target, token, "old")?;
+    let existed = target.exists();
+
+    let result = (|| {
+        let mut output = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .map_err(|error| format!("Cannot create atomic temporary file: {error}"))?;
+        output
+            .write_all(bytes)
+            .map_err(|error| format!("Cannot write temporary file: {error}"))?;
+        output
+            .sync_all()
+            .map_err(|error| format!("Cannot flush temporary file: {error}"))?;
+
+        if existed {
+            let permissions = fs::metadata(target)
+                .map_err(|error| error.to_string())?
+                .permissions();
+            fs::set_permissions(&temporary, permissions)
+                .map_err(|error| format!("Cannot preserve file permissions: {error}"))?;
+            fs::rename(target, &displaced)
+                .map_err(|error| format!("Cannot stage the previous file: {error}"))?;
+        }
+
+        if let Err(error) = fs::rename(&temporary, target) {
+            if existed {
+                let _ = fs::rename(&displaced, target);
+            }
+            return Err(format!("Cannot atomically install the new file: {error}"));
+        }
+        if existed {
+            fs::remove_file(&displaced)
+                .map_err(|error| format!("New file was written, but old staging cleanup failed: {error}"))?;
+        }
+        Ok(())
+    })();
+
+    if temporary.exists() {
+        let _ = fs::remove_file(&temporary);
+    }
+    if result.is_err() && displaced.exists() && !target.exists() {
+        let _ = fs::rename(&displaced, target);
+    }
+    result
+}
+
+fn store_change(state: &CodexState, record: ChangeRecord) -> Result<(), String> {
+    let mut changes = state
+        .changes
+        .lock()
+        .map_err(|_| lock_error("Undo"))?;
+    changes.push_back(record);
+    while changes.len() > MAX_CHANGES {
+        if let Some(expired) = changes.pop_front() {
+            if let Some(path) = expired.backup_path {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn read_bounded_text(path: &Path, maximum: u64) -> Result<(Vec<u8>, fs::Metadata), String> {
+    let metadata = fs::metadata(path).map_err(|error| format!("Cannot inspect file: {error}"))?;
+    if !metadata.is_file() {
+        return Err("The requested path is not a regular file.".to_string());
+    }
+    if metadata.len() > maximum {
+        return Err(format!("File is larger than the {maximum}-byte safety limit."));
+    }
+    let bytes = fs::read(path).map_err(|error| format!("Cannot read file: {error}"))?;
+    if bytes.contains(&0) {
+        return Err("Binary files are not exposed to the text Codex broker.".to_string());
+    }
+    Ok((bytes, metadata))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_pick_workspace(
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<Option<WorkspaceGrantInfo>, String> {
+    let selected = app
+        .dialog()
+        .file()
+        .set_title("Ø§Ù†ØªØ®Ø§Ø¨ Ù¾ÙˆØ´Ù‡ Ù¾Ø±ÙˆÚ˜Ù‡ Ø¨Ø±Ø§ÛŒ Codex")
+        .blocking_pick_folder();
+    let Some(selected) = selected else {
+        push_audit(&state, "workspace.pick", "cancelled", None, None, None);
+        return Ok(None);
+    };
+    let picked = selected
+        .into_path()
+        .map_err(|error| format!("Selected folder is not a local filesystem path: {error}"))?;
+    let canonical = fs::canonicalize(&picked)
+        .map_err(|error| format!("Cannot resolve selected workspace: {error}"))?;
+    if let Err(error) = validate_workspace_root(&canonical) {
+        push_audit(
+            &state,
+            "workspace.pick",
+            "denied",
+            None,
+            canonical.file_name().and_then(|value| value.to_str()),
+            Some(error.clone()),
+        );
+        return Err(error);
+    }
+
+    let id = new_id("ws");
+    let name = canonical
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Workspace".to_string());
+    let granted_at_ms = now_ms();
+    let grant = WorkspaceGrant {
+        id: id.clone(),
+        root: canonical.clone(),
+        name: name.clone(),
+        granted_at_ms,
+    };
+    state
+        .workspaces
+        .lock()
+        .map_err(|_| lock_error("Workspace permission"))?
+        .insert(id.clone(), grant);
+    push_audit(
+        &state,
+        "workspace.pick",
+        "granted",
+        Some(&id),
+        Some(&name),
+        None,
+    );
+    Ok(Some(WorkspaceGrantInfo {
+        id,
+        name,
+        display_path: path_for_display(&canonical),
+        granted_at_ms,
+    }))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn codex_revoke_workspace(
+    workspace_id: String,
+    state: State<'_, CodexState>,
+) -> Result<RevokeResult, String> {
+    let removed = state
+        .workspaces
+        .lock()
+        .map_err(|_| lock_error("Workspace permission"))?
+        .remove(&workspace_id)
+        .is_some();
+
+    let mut removed_records = 0usize;
+    if removed {
+        let mut changes = state.changes.lock().map_err(|_| lock_error("Undo"))?;
+        changes.retain(|record| {
+            if record.workspace_id == workspace_id {
+                removed_records += 1;
+                if let Some(path) = &record.backup_path {
+                    let _ = fs::remove_file(path);
+                }
+                false
+            } else {
+                true
+            }
+        });
+    }
+    push_audit(
+        &state,
+        "workspace.revoke",
+        if removed { "revoked" } else { "not_found" },
+        Some(&workspace_id),
+        None,
+        None,
+    );
+    Ok(RevokeResult {
+        revoked: removed,
+        removed_undo_records: removed_records,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn codex_list_directory(
+    workspace_id: String,
+    relative_path: String,
+    state: State<'_, CodexState>,
+) -> Result<Vec<DirectoryEntry>, String> {
+    let grant = get_workspace(&state, &workspace_id)?;
+    let (directory, normalized_relative) = resolve_existing(&grant, &relative_path, true)?;
+    if !directory.is_dir() {
+        return Err("The requested path is not a directory.".to_string());
+    }
+
+    let mut entries = Vec::new();
+    let reader = fs::read_dir(&directory)
+        .map_err(|error| format!("Cannot list workspace directory: {error}"))?;
+    for item in reader.take(MAX_DIRECTORY_ENTRIES + 1) {
+        if entries.len() == MAX_DIRECTORY_ENTRIES {
+            return Err(format!(
+                "Directory contains more than {MAX_DIRECTORY_ENTRIES} entries; narrow the path."
+            ));
+        }
+        let item = item.map_err(|error| format!("Cannot inspect directory entry: {error}"))?;
+        let mut item_relative = normalized_relative.clone();
+        item_relative.push(item.file_name());
+        if is_secret_relative(&item_relative) {
+            continue;
+        }
+        let link_metadata = fs::symlink_metadata(item.path())
+            .map_err(|error| format!("Cannot inspect directory entry: {error}"))?;
+        let canonical = match fs::canonicalize(item.path()) {
+            Ok(path) if ensure_contained(&grant.root, &path).is_ok() => path,
+            _ => continue,
+        };
+        let metadata = fs::metadata(&canonical)
+            .map_err(|error| format!("Cannot inspect directory entry: {error}"))?;
+        entries.push(DirectoryEntry {
+            name: item.file_name().to_string_lossy().to_string(),
+            relative_path: normalize_relative_for_result(&item_relative),
+            is_directory: metadata.is_dir(),
+            is_symlink: link_metadata.file_type().is_symlink(),
+            size: if metadata.is_file() { metadata.len() } else { 0 },
+            modified_at_ms: modified_ms(&metadata),
+        });
+    }
+    entries.sort_by(|left, right| {
+        right
+            .is_directory
+            .cmp(&left.is_directory)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+    push_audit(
+        &state,
+        "workspace.list",
+        "allowed",
+        Some(&workspace_id),
+        Some(&relative_path),
+        Some(format!("{} visible entries", entries.len())),
+    );
+    Ok(entries)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn codex_read_file(
+    workspace_id: String,
+    relative_path: String,
+    state: State<'_, CodexState>,
+) -> Result<TextFileResult, String> {
+    let grant = get_workspace(&state, &workspace_id)?;
+    let (path, normalized_relative) = resolve_existing(&grant, &relative_path, false)?;
+    let (bytes, metadata) = read_bounded_text(&path, MAX_READ_BYTES)?;
+    let content = String::from_utf8(bytes.clone())
+        .map_err(|_| "File is not valid UTF-8 text.".to_string())?;
+    let result = TextFileResult {
+        relative_path: normalize_relative_for_result(&normalized_relative),
+        content,
+        sha256: sha256_bytes(&bytes),
+        size: bytes.len() as u64,
+        modified_at_ms: modified_ms(&metadata),
+    };
+    push_audit(
+        &state,
+        "workspace.read",
+        "allowed",
+        Some(&workspace_id),
+        Some(&relative_path),
+        Some(format!("{} bytes", result.size)),
+    );
+    Ok(result)
+}
+
+fn should_skip_search_directory(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        ".git"
+            | "node_modules"
+            | "target"
+            | "dist"
+            | "build"
+            | ".next"
+            | ".turbo"
+            | ".gradle"
+            | ".idea"
+            | "coverage"
+    )
+}
+
+fn collect_search_files(
+    grant: &WorkspaceGrant,
+    directory: &Path,
+    relative_directory: &Path,
+    depth: usize,
+    files: &mut Vec<(PathBuf, PathBuf)>,
+    truncated: &mut bool,
+) -> Result<(), String> {
+    if depth > 32 || files.len() >= MAX_SEARCHED_FILES {
+        *truncated = true;
+        return Ok(());
+    }
+    let entries = match fs::read_dir(directory) {
+        Ok(value) => value,
+        Err(_) => return Ok(()),
+    };
+    for entry in entries {
+        if files.len() >= MAX_SEARCHED_FILES {
+            *truncated = true;
+            break;
+        }
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let mut relative = relative_directory.to_path_buf();
+        relative.push(entry.file_name());
+        if is_secret_relative(&relative) {
+            continue;
+        }
+        let Ok(link_metadata) = fs::symlink_metadata(entry.path()) else {
+            continue;
+        };
+        if link_metadata.file_type().is_symlink() {
+            continue;
+        }
+        let Ok(canonical) = fs::canonicalize(entry.path()) else {
+            continue;
+        };
+        if ensure_contained(&grant.root, &canonical).is_err() {
+            continue;
+        }
+        if canonical.is_dir() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !should_skip_search_directory(&name) {
+                collect_search_files(
+                    grant,
+                    &canonical,
+                    &relative,
+                    depth + 1,
+                    files,
+                    truncated,
+                )?;
+            }
+        } else if canonical.is_file() {
+            files.push((canonical, relative));
+        }
+    }
+    Ok(())
+}
+
+fn clipped_excerpt(line: &str) -> String {
+    const MAX_EXCERPT_CHARS: usize = 360;
+    let clean = line.replace(['\r', '\n', '\0'], " ");
+    if clean.chars().count() <= MAX_EXCERPT_CHARS {
+        clean
+    } else {
+        format!("{}â€¦", clean.chars().take(MAX_EXCERPT_CHARS).collect::<String>())
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn codex_search_workspace(
+    workspace_id: String,
+    query: String,
+    relative_path: Option<String>,
+    max_results: Option<usize>,
+    state: State<'_, CodexState>,
+) -> Result<SearchResponse, String> {
+    let query = query.trim();
+    if query.is_empty() || query.chars().count() > 256 || query.contains(['\r', '\n', '\0']) {
+        return Err("Search query must contain 1 to 256 printable characters.".to_string());
+    }
+    let result_limit = max_results.unwrap_or(100);
+    if result_limit == 0 || result_limit > MAX_SEARCH_RESULTS {
+        return Err(format!("maxResults must be between 1 and {MAX_SEARCH_RESULTS}."));
+    }
+    let grant = get_workspace(&state, &workspace_id)?;
+    let requested = relative_path.unwrap_or_default();
+    let (start, relative_start) = resolve_existing(&grant, &requested, true)?;
+    if !start.is_dir() {
+        return Err("Search root must be a directory.".to_string());
+    }
+
+    let mut files = Vec::new();
+    let mut truncated = false;
+    collect_search_files(
+        &grant,
+        &start,
+        &relative_start,
+        0,
+        &mut files,
+        &mut truncated,
+    )?;
+    let needle = query.to_lowercase();
+    let mut matches = Vec::new();
+    let mut files_scanned = 0usize;
+    'files: for (path, relative) in files {
+        let Ok(metadata) = fs::metadata(&path) else {
+            continue;
+        };
+        if metadata.len() > MAX_SEARCH_FILE_BYTES {
+            continue;
+        }
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        if bytes.contains(&0) {
+            continue;
+        }
+        let Ok(text) = String::from_utf8(bytes) else {
+            continue;
+        };
+        files_scanned += 1;
+        for (line_index, line) in text.lines().enumerate() {
+            let lowered = line.to_lowercase();
+            let Some(byte_column) = lowered.find(&needle) else {
+                continue;
+            };
+            // Lowercasing can change Unicode byte width.  This is a display hint, not
+            // a byte offset used for mutation.
+            let column = lowered[..byte_column].chars().count() + 1;
+            matches.push(SearchMatch {
+                relative_path: normalize_relative_for_result(&relative),
+                line: line_index + 1,
+                column,
+                excerpt: clipped_excerpt(line),
+            });
+            if matches.len() == result_limit {
+                truncated = true;
+                break 'files;
+            }
+        }
+    }
+    push_audit(
+        &state,
+        "workspace.search",
+        "allowed",
+        Some(&workspace_id),
+        Some(&requested),
+        Some(format!("{files_scanned} files, {} matches", matches.len())),
+    );
+    Ok(SearchResponse {
+        matches,
+        files_scanned,
+        truncated,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_write_file(
+    workspace_id: String,
+    relative_path: String,
+    content: String,
+    expected_sha256: Option<String>,
+    reason: Option<String>,
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<MutationResult, String> {
+    if content.len() > MAX_WRITE_BYTES {
+        return Err(format!(
+            "Refusing to write more than {MAX_WRITE_BYTES} UTF-8 bytes in one operation."
+        ));
+    }
+    let grant = get_workspace(&state, &workspace_id)?;
+    let (target, normalized_relative, existed) =
+        resolve_mutation_target(&grant, &relative_path)?;
+
+    let existing_bytes = if existed {
+        if !target.is_file() {
+            return Err("The target exists but is not a regular file.".to_string());
+        }
+        let (bytes, _) = read_bounded_text(&target, MAX_WRITE_BYTES as u64)?;
+        String::from_utf8(bytes.clone())
+            .map_err(|_| "Existing file is not valid UTF-8 text.".to_string())?;
+        Some(bytes)
+    } else {
+        None
+    };
+    let before_sha256 = verify_expected_hash(existing_bytes.as_deref(), expected_sha256.as_deref())?;
+    let after_sha256 = sha256_bytes(content.as_bytes());
+    let relative_display = normalize_relative_for_result(&normalized_relative);
+    let reason = reason
+        .filter(|value| !value.trim().is_empty())
+        .map(capped_detail)
+        .unwrap_or_else(|| "Ø¯Ø±Ø®ÙˆØ§Ø³Øª Ú©Ø§Ø±Ø¨Ø± Ø¯Ø± Codex".to_string());
+    let message = format!(
+        "Codex Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ Ø§ÛŒÙ† ÙØ§ÛŒÙ„ Ø±Ø§ {} Ú©Ù†Ø¯:\n\n{}\n\nØ­Ø¬Ù…: {} Ø¨Ø§ÛŒØª\nØ¯Ù„ÛŒÙ„: {}\n\nÙ‚Ø¨Ù„ Ø§Ø² Ø§Ø¯Ø§Ù…Ù‡ ÛŒÚ© Ù†Ø³Ø®Ù‡Ù” Ø¨Ø§Ø²Ú¯Ø´Øª Ø§Ù…Ù† Ø®Ø§Ø±Ø¬ Ø§Ø² Ù¾ÙˆØ´Ù‡ Ù¾Ø±ÙˆÚ˜Ù‡ Ù†Ú¯Ù‡Ø¯Ø§Ø±ÛŒ Ù…ÛŒâ€ŒØ´ÙˆØ¯.",
+        if existed { "Ø¬Ø§ÛŒÚ¯Ø²ÛŒÙ†" } else { "Ø§ÛŒØ¬Ø§Ø¯" },
+        relative_display,
+        content.len(),
+        reason
+    );
+    if !native_confirm(&app, "FarsiAI Codex â€” ØªØ£ÛŒÛŒØ¯ Ù†ÙˆØ´ØªÙ† ÙØ§ÛŒÙ„", message) {
+        push_audit(
+            &state,
+            "workspace.write",
+            "cancelled",
+            Some(&workspace_id),
+            Some(&relative_display),
+            None,
+        );
+        return Err("File write was cancelled by the user in the native dialog.".to_string());
+    }
+
+    // Re-resolve and re-check the hash after confirmation to close the most likely
+    // time-of-check/time-of-use window while the dialog was open.
+    let (confirmed_target, _, confirmed_exists) =
+        resolve_mutation_target(&grant, &relative_path)?;
+    if confirmed_target != target || confirmed_exists != existed {
+        return Err("Target changed while permission was being confirmed; operation aborted.".to_string());
+    }
+    if existed {
+        let current = fs::read(&target)
+            .map_err(|error| format!("Cannot re-check target before writing: {error}"))?;
+        verify_expected_hash(Some(&current), expected_sha256.as_deref())?;
+    }
+
+    let change_id = new_id("change");
+    let backup_path = if existed {
+        Some(create_external_backup(
+            &app,
+            &workspace_id,
+            &change_id,
+            &target,
+        )?)
+    } else {
+        None
+    };
+    if let Err(error) = write_atomicish(&target, content.as_bytes(), &change_id) {
+        if let Some(path) = backup_path {
+            let _ = fs::remove_file(path);
+        }
+        push_audit(
+            &state,
+            "workspace.write",
+            "failed",
+            Some(&workspace_id),
+            Some(&relative_display),
+            Some(error.clone()),
+        );
+        return Err(error);
+    }
+    let installed = fs::canonicalize(&target)
+        .map_err(|error| format!("Cannot verify written file: {error}"))?;
+    ensure_contained(&grant.root, &installed)?;
+    let installed_bytes = fs::read(&installed)
+        .map_err(|error| format!("Cannot verify written bytes: {error}"))?;
+    if sha256_bytes(&installed_bytes) != after_sha256 {
+        return Err("Post-write SHA-256 verification failed.".to_string());
+    }
+
+    let record = ChangeRecord {
+        id: change_id.clone(),
+        workspace_id: workspace_id.clone(),
+        relative_path: relative_display.clone(),
+        kind: if existed {
+            ChangeKind::ReplacedFile
+        } else {
+            ChangeKind::CreatedFile
+        },
+        backup_path: backup_path.clone(),
+        before_sha256: before_sha256.clone(),
+        after_sha256: Some(after_sha256.clone()),
+        undone: false,
+    };
+    if let Err(error) = store_change(&state, record) {
+        // A mutation without an undo record is not acceptable. Roll back immediately.
+        if let Some(backup) = &backup_path {
+            let _ = write_atomicish(&target, &fs::read(backup).unwrap_or_default(), "rollback");
+        } else {
+            let _ = fs::remove_file(&target);
+        }
+        return Err(error);
+    }
+    push_audit(
+        &state,
+        "workspace.write",
+        "completed",
+        Some(&workspace_id),
+        Some(&relative_display),
+        Some(format!("change {change_id}")),
+    );
+    Ok(MutationResult {
+        operation: if existed { "replace_file" } else { "create_file" }.to_string(),
+        change_id,
+        relative_path: relative_display,
+        before_sha256,
+        after_sha256: Some(after_sha256),
+        bytes_written: content.len() as u64,
+        backup_available: backup_path.is_some(),
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_create_directory(
+    workspace_id: String,
+    relative_path: String,
+    reason: Option<String>,
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<MutationResult, String> {
+    let grant = get_workspace(&state, &workspace_id)?;
+    let (target, normalized_relative, exists) =
+        resolve_mutation_target(&grant, &relative_path)?;
+    if exists {
+        return Err("The requested directory already exists.".to_string());
+    }
+    let relative_display = normalize_relative_for_result(&normalized_relative);
+    let reason = reason
+        .filter(|value| !value.trim().is_empty())
+        .map(capped_detail)
+        .unwrap_or_else(|| "Ø¯Ø±Ø®ÙˆØ§Ø³Øª Ú©Ø§Ø±Ø¨Ø± Ø¯Ø± Codex".to_string());
+    if !native_confirm(
+        &app,
+        "FarsiAI Codex â€” ØªØ£ÛŒÛŒØ¯ Ø§ÛŒØ¬Ø§Ø¯ Ù¾ÙˆØ´Ù‡",
+        format!(
+            "Codex Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ Ø§ÛŒÙ† Ù¾ÙˆØ´Ù‡ Ø±Ø§ Ø§ÛŒØ¬Ø§Ø¯ Ú©Ù†Ø¯:\n\n{}\n\nØ¯Ù„ÛŒÙ„: {}",
+            relative_display, reason
+        ),
+    ) {
+        push_audit(
+            &state,
+            "workspace.mkdir",
+            "cancelled",
+            Some(&workspace_id),
+            Some(&relative_display),
+            None,
+        );
+        return Err("Directory creation was cancelled by the user.".to_string());
+    }
+    let (confirmed, _, confirmed_exists) = resolve_mutation_target(&grant, &relative_path)?;
+    if confirmed != target || confirmed_exists {
+        return Err("Directory target changed while permission was being confirmed.".to_string());
+    }
+
+    fs::create_dir(&target).map_err(|error| format!("Cannot create directory: {error}"))?;
+    let canonical = fs::canonicalize(&target)
+        .map_err(|error| format!("Cannot verify new directory: {error}"))?;
+    ensure_contained(&grant.root, &canonical)?;
+    let change_id = new_id("change");
+    let record = ChangeRecord {
+        id: change_id.clone(),
+        workspace_id: workspace_id.clone(),
+        relative_path: relative_display.clone(),
+        kind: ChangeKind::CreatedDirectory,
+        backup_path: None,
+        before_sha256: None,
+        after_sha256: None,
+        undone: false,
+    };
+    if let Err(error) = store_change(&state, record) {
+        let _ = fs::remove_dir(&target);
+        return Err(error);
+    }
+    push_audit(
+        &state,
+        "workspace.mkdir",
+        "completed",
+        Some(&workspace_id),
+        Some(&relative_display),
+        Some(format!("change {change_id}")),
+    );
+    Ok(MutationResult {
+        operation: "create_directory".to_string(),
+        change_id,
+        relative_path: relative_display,
+        before_sha256: None,
+        after_sha256: None,
+        bytes_written: 0,
+        backup_available: false,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_undo_change(
+    workspace_id: String,
+    change_id: String,
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<MutationResult, String> {
+    let grant = get_workspace(&state, &workspace_id)?;
+    let record = state
+        .changes
+        .lock()
+        .map_err(|_| lock_error("Undo"))?
+        .iter()
+        .find(|record| record.id == change_id && record.workspace_id == workspace_id)
+        .cloned()
+        .ok_or_else(|| "Undo record was not found for this workspace.".to_string())?;
+    if record.undone {
+        return Err("This change has already been undone.".to_string());
+    }
+
+    let (target, _, exists) = resolve_mutation_target(&grant, &record.relative_path)?;
+    match record.kind {
+        ChangeKind::ReplacedFile | ChangeKind::CreatedFile => {
+            if !exists || !target.is_file() {
+                return Err("Current file no longer exists; undo stopped to protect newer work.".to_string());
+            }
+            let current = fs::read(&target)
+                .map_err(|error| format!("Cannot verify current file before undo: {error}"))?;
+            if record.after_sha256.as_deref() != Some(sha256_bytes(&current).as_str()) {
+                return Err("Current file changed after the Codex edit; undo conflict detected.".to_string());
+            }
+        }
+        ChangeKind::CreatedDirectory => {
+            if !exists || !target.is_dir() {
+                return Err("Created directory no longer exists.".to_string());
+            }
+            if fs::read_dir(&target)
+                .map_err(|error| format!("Cannot inspect directory for undo: {error}"))?
+                .next()
+                .is_some()
+            {
+                return Err("Directory is no longer empty, so automatic undo is blocked.".to_string());
+            }
+        }
+    }
+    if !native_confirm(
+        &app,
+        "FarsiAI Codex â€” ØªØ£ÛŒÛŒØ¯ Ø¨Ø§Ø²Ú¯Ø±Ø¯Ø§Ù†ÛŒ",
+        format!(
+            "Ø§ÛŒÙ† ØªØºÛŒÛŒØ± Codex Ø¨Ø§Ø²Ú¯Ø±Ø¯Ø§Ù†Ø¯Ù‡ Ø´ÙˆØ¯ØŸ\n\n{}\n\nØ´Ù†Ø§Ø³Ù‡ ØªØºÛŒÛŒØ±: {}",
+            record.relative_path, record.id
+        ),
+    ) {
+        push_audit(
+            &state,
+            "workspace.undo",
+            "cancelled",
+            Some(&workspace_id),
+            Some(&record.relative_path),
+            None,
+        );
+        return Err("Undo was cancelled by the user.".to_string());
+    }
+
+    match record.kind {
+        ChangeKind::ReplacedFile => {
+            let backup = record
+                .backup_path
+                .as_ref()
+                .ok_or_else(|| "Protected undo backup is missing.".to_string())?;
+            let backup_bytes = fs::read(backup)
+                .map_err(|error| format!("Cannot read protected undo backup: {error}"))?;
+            if record.before_sha256.as_deref() != Some(sha256_bytes(&backup_bytes).as_str()) {
+                return Err("Undo backup SHA-256 verification failed.".to_string());
+            }
+            write_atomicish(&target, &backup_bytes, &format!("undo-{change_id}"))?;
+        }
+        ChangeKind::CreatedFile => {
+            fs::remove_file(&target)
+                .map_err(|error| format!("Cannot remove Codex-created file: {error}"))?;
+        }
+        ChangeKind::CreatedDirectory => {
+            fs::remove_dir(&target)
+                .map_err(|error| format!("Cannot remove Codex-created directory: {error}"))?;
+        }
+    }
+
+    {
+        let mut changes = state.changes.lock().map_err(|_| lock_error("Undo"))?;
+        let stored = changes
+            .iter_mut()
+            .find(|stored| stored.id == change_id && stored.workspace_id == workspace_id)
+            .ok_or_else(|| "Undo record disappeared before completion.".to_string())?;
+        stored.undone = true;
+    }
+    if let Some(path) = &record.backup_path {
+        let _ = fs::remove_file(path);
+    }
+    push_audit(
+        &state,
+        "workspace.undo",
+        "completed",
+        Some(&workspace_id),
+        Some(&record.relative_path),
+        Some(format!("change {change_id}")),
+    );
+    Ok(MutationResult {
+        operation: "undo".to_string(),
+        change_id,
+        relative_path: record.relative_path,
+        before_sha256: record.after_sha256,
+        after_sha256: record.before_sha256,
+        bytes_written: 0,
+        backup_available: false,
+    })
+}
+
+fn blocked_application_name(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "cmd.exe"
+            | "powershell.exe"
+            | "pwsh.exe"
+            | "wscript.exe"
+            | "cscript.exe"
+            | "mshta.exe"
+            | "rundll32.exe"
+            | "regsvr32.exe"
+            | "reg.exe"
+            | "sc.exe"
+            | "schtasks.exe"
+            | "certutil.exe"
+            | "bitsadmin.exe"
+            | "wmic.exe"
+            | "msiexec.exe"
+            | "taskkill.exe"
+    )
+}
+
+fn validate_process_args(args: &[String], for_script_wrapper: bool) -> Result<(), String> {
+    if args.len() > MAX_COMMAND_ARGS {
+        return Err(format!("No more than {MAX_COMMAND_ARGS} arguments are allowed."));
+    }
+    let total: usize = args.iter().map(String::len).sum();
+    if total > MAX_COMMAND_ARG_BYTES {
+        return Err("Combined process arguments are too large.".to_string());
+    }
+    for argument in args {
+        if argument.contains('\0')
+            || argument.contains(['\r', '\n'])
+            || argument.chars().any(|character| character.is_control())
+        {
+            return Err("Process argument contains forbidden control characters.".to_string());
+        }
+        if for_script_wrapper && argument.contains(['&', '|', '<', '>', '^', '%', '!']) {
+            return Err("Shell metacharacters are blocked for command-wrapper executables.".to_string());
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_pick_application(
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<Option<ApplicationGrantInfo>, String> {
+    let selected = app
+        .dialog()
+        .file()
+        .set_title("Ø§Ù†ØªØ®Ø§Ø¨ Ø¨Ø±Ù†Ø§Ù…Ù‡ Ø¨Ø±Ø§ÛŒ Codex")
+        .add_filter("Windows applications", &["exe"])
+        .blocking_pick_file();
+    let Some(selected) = selected else {
+        push_audit(&state, "application.pick", "cancelled", None, None, None);
+        return Ok(None);
+    };
+    let path = selected
+        .into_path()
+        .map_err(|error| format!("Selected application is not a local file: {error}"))?;
+    let canonical = fs::canonicalize(path)
+        .map_err(|error| format!("Cannot resolve selected application: {error}"))?;
+    if !canonical.is_file()
+        || !canonical
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+    {
+        return Err("Only an existing Windows .exe application can be approved.".to_string());
+    }
+    if blocked_application_name(&canonical) {
+        push_audit(
+            &state,
+            "application.pick",
+            "denied",
+            None,
+            canonical.file_name().and_then(|value| value.to_str()),
+            Some("High-risk system utility".to_string()),
+        );
+        return Err("Command shells, script hosts, installers, and high-risk system utilities cannot be granted as applications.".to_string());
+    }
+
+    let id = new_id("app");
+    let name = canonical
+        .file_stem()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Application".to_string());
+    let granted_at_ms = now_ms();
+    state
+        .applications
+        .lock()
+        .map_err(|_| lock_error("Application permission"))?
+        .insert(
+            id.clone(),
+            ApplicationGrant {
+                id: id.clone(),
+                executable: canonical.clone(),
+                name: name.clone(),
+                granted_at_ms,
+            },
+        );
+    push_audit(
+        &state,
+        "application.pick",
+        "granted",
+        None,
+        Some(&name),
+        None,
+    );
+    Ok(Some(ApplicationGrantInfo {
+        id,
+        name,
+        display_path: path_for_display(&canonical),
+        granted_at_ms,
+    }))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_launch_application(
+    application_id: String,
+    args: Vec<String>,
+    reason: Option<String>,
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<LaunchResult, String> {
+    let grant = get_application(&state, &application_id)?;
+    validate_process_args(&args, false)?;
+    let canonical = fs::canonicalize(&grant.executable)
+        .map_err(|_| "Approved application no longer exists.".to_string())?;
+    if canonical != grant.executable || blocked_application_name(&canonical) {
+        return Err("Approved application changed on disk; choose it again.".to_string());
+    }
+    let argument_preview = if args.is_empty() {
+        "(Ø¨Ø¯ÙˆÙ† Ø¢Ø±Ú¯ÙˆÙ…Ø§Ù†)".to_string()
+    } else {
+        args.iter()
+            .map(|value| capped_detail(value))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let reason = reason
+        .filter(|value| !value.trim().is_empty())
+        .map(capped_detail)
+        .unwrap_or_else(|| "Ø¯Ø±Ø®ÙˆØ§Ø³Øª Ú©Ø§Ø±Ø¨Ø± Ø¯Ø± Codex".to_string());
+    if !native_confirm(
+        &app,
+        "FarsiAI Codex â€” ØªØ£ÛŒÛŒØ¯ Ø§Ø¬Ø±Ø§ÛŒ Ø¨Ø±Ù†Ø§Ù…Ù‡",
+        format!(
+            "Codex Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ Ø¨Ø±Ù†Ø§Ù…Ù‡ Ø²ÛŒØ± Ø±Ø§ Ø§Ø¬Ø±Ø§ Ú©Ù†Ø¯:\n\n{}\n{}\n\nØ¢Ø±Ú¯ÙˆÙ…Ø§Ù†â€ŒÙ‡Ø§: {}\nØ¯Ù„ÛŒÙ„: {}",
+            grant.name,
+            path_for_display(&canonical),
+            argument_preview,
+            reason
+        ),
+    ) {
+        push_audit(
+            &state,
+            "application.launch",
+            "cancelled",
+            None,
+            Some(&grant.name),
+            None,
+        );
+        return Err("Application launch was cancelled by the user.".to_string());
+    }
+
+    let child = Command::new(&canonical)
+        .args(&args)
+        .spawn()
+        .map_err(|error| format!("Cannot launch approved application: {error}"))?;
+    let process_id = child.id();
+    push_audit(
+        &state,
+        "application.launch",
+        "started",
+        None,
+        Some(&grant.name),
+        Some(format!("pid {process_id}")),
+    );
+    Ok(LaunchResult {
+        application_id,
+        name: grant.name,
+        process_id,
+    })
+}
+
+struct ProgramProfile {
+    name: &'static str,
+    windows_files: &'static [&'static str],
+    label: &'static str,
+}
+
+fn program_profile(program: &str) -> Option<ProgramProfile> {
+    let profile = match program {
+        "git" => ProgramProfile { name: "git", windows_files: &["git.exe"], label: "Git (read-only profile)" },
+        "node" => ProgramProfile { name: "node", windows_files: &["node.exe"], label: "Node.js project script" },
+        "python" => ProgramProfile { name: "python", windows_files: &["python.exe", "python3.exe"], label: "Python project script/test" },
+        "python3" => ProgramProfile { name: "python3", windows_files: &["python3.exe", "python.exe"], label: "Python project script/test" },
+        "pytest" => ProgramProfile { name: "pytest", windows_files: &["pytest.exe"], label: "Python tests" },
+        "npm" => ProgramProfile { name: "npm", windows_files: &["npm.cmd"], label: "npm project task" },
+        "npx" => ProgramProfile { name: "npx", windows_files: &["npx.cmd"], label: "Approved Node.js project tool" },
+        "pnpm" => ProgramProfile { name: "pnpm", windows_files: &["pnpm.cmd", "pnpm.exe"], label: "pnpm project task" },
+        "yarn" => ProgramProfile { name: "yarn", windows_files: &["yarn.cmd"], label: "Yarn project task" },
+        "bun" => ProgramProfile { name: "bun", windows_files: &["bun.exe"], label: "Bun project task" },
+        "deno" => ProgramProfile { name: "deno", windows_files: &["deno.exe"], label: "Deno check/test task" },
+        "cargo" => ProgramProfile { name: "cargo", windows_files: &["cargo.exe"], label: "Rust build/test task" },
+        "rustc" => ProgramProfile { name: "rustc", windows_files: &["rustc.exe"], label: "Rust compiler" },
+        "go" => ProgramProfile { name: "go", windows_files: &["go.exe"], label: "Go build/test task" },
+        "dotnet" => ProgramProfile { name: "dotnet", windows_files: &["dotnet.exe"], label: ".NET build/test task" },
+        "java" => ProgramProfile { name: "java", windows_files: &["java.exe"], label: "Java project task" },
+        "javac" => ProgramProfile { name: "javac", windows_files: &["javac.exe"], label: "Java compiler" },
+        "mvn" => ProgramProfile { name: "mvn", windows_files: &["mvn.cmd", "mvn.exe"], label: "Maven build/test task" },
+        "gradle" => ProgramProfile { name: "gradle", windows_files: &["gradle.bat", "gradle.exe"], label: "Gradle build/test task" },
+        "ruff" => ProgramProfile { name: "ruff", windows_files: &["ruff.exe"], label: "Python linter/formatter" },
+        "tsc" => ProgramProfile { name: "tsc", windows_files: &["tsc.cmd"], label: "TypeScript compiler" },
+        "eslint" => ProgramProfile { name: "eslint", windows_files: &["eslint.cmd"], label: "JavaScript linter" },
+        "prettier" => ProgramProfile { name: "prettier", windows_files: &["prettier.cmd"], label: "Code formatter" },
+        "vitest" => ProgramProfile { name: "vitest", windows_files: &["vitest.cmd"], label: "JavaScript tests" },
+        _ => return None,
+    };
+    Some(profile)
+}
+
+fn argument_has_external_path(argument: &str) -> bool {
+    if argument.starts_with(['/', '\\'])
+        || argument.as_bytes().get(1) == Some(&b':')
+        || Path::new(argument).is_absolute()
+    {
+        return true;
+    }
+    argument
+        .split(['/', '\\'])
+        .any(|component| component == "..")
+}
+
+fn validate_project_script(
+    grant: &WorkspaceGrant,
+    argument: &str,
+    extensions: &[&str],
+) -> Result<(), String> {
+    let (path, _) = resolve_existing(grant, argument, false)?;
+    if !path.is_file() {
+        return Err("Project script argument is not a regular file.".to_string());
+    }
+    if !extensions.is_empty()
+        && !path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|extension| {
+                extensions
+                    .iter()
+                    .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+            })
+    {
+        return Err("Project script has an extension outside this command profile.".to_string());
+    }
+    Ok(())
+}
+
+fn first_command_word(args: &[String]) -> Option<&str> {
+    args.iter()
+        .find(|argument| !argument.starts_with('-'))
+        .map(String::as_str)
+}
+
+fn validate_command_profile(
+    profile: &ProgramProfile,
+    args: &[String],
+    grant: &WorkspaceGrant,
+) -> Result<(), String> {
+    validate_process_args(args, false)?;
+    const EXTERNAL_PATH_FLAGS: &[&str] = &[
+        "--cwd",
+        "--chdir",
+        "--prefix",
+        "--global",
+        "--git-dir",
+        "--work-tree",
+        "--exec-path",
+        "--upload-pack",
+        "--config-env",
+    ];
+    for argument in args {
+        let lowered = argument.to_ascii_lowercase();
+        if EXTERNAL_PATH_FLAGS
+            .iter()
+            .any(|flag| lowered == *flag || lowered.starts_with(&format!("{flag}=")))
+            || lowered == "-g"
+            || lowered == "-c"
+        {
+            return Err("Command argument can redirect execution outside the approved project.".to_string());
+        }
+        if !argument.starts_with('-') && argument_has_external_path(argument) {
+            return Err("Absolute paths and parent traversal are blocked in command arguments.".to_string());
+        }
+    }
+
+    let first = first_command_word(args).unwrap_or("").to_ascii_lowercase();
+    match profile.name {
+        "git" => {
+            if args.iter().any(|argument| {
+                let value = argument.to_ascii_lowercase();
+                value.starts_with("-c")
+                    || value.starts_with("--config")
+                    || value.starts_with("--namespace")
+            }) {
+                return Err("Git configuration injection is blocked.".to_string());
+            }
+            const ALLOWED: &[&str] = &[
+                "", "status", "diff", "log", "show", "branch", "rev-parse", "ls-files",
+                "grep", "describe", "check-ignore", "blame", "shortlog", "tag",
+            ];
+            if !ALLOWED.contains(&first.as_str()) && !args.iter().any(|value| value == "--version") {
+                return Err("Git is restricted to read-only inspection commands.".to_string());
+            }
+        }
+        "node" => {
+            const BLOCKED: &[&str] = &[
+                "-e", "--eval", "-p", "--print", "-r", "--require", "--import",
+                "--loader", "--experimental-loader", "--inspect", "--inspect-brk",
+            ];
+            if args.iter().any(|value| {
+                let lowered = value.to_ascii_lowercase();
+                BLOCKED
+                    .iter()
+                    .any(|blocked| lowered == *blocked || lowered.starts_with(&format!("{blocked}=")))
+            }) {
+                return Err("Inline code, loaders, and debugger injection are blocked for Node.js.".to_string());
+            }
+            if !first.is_empty()
+                && !first.starts_with("--")
+                && !matches!(first.as_str(), "test" | "check")
+            {
+                validate_project_script(grant, &first, &["js", "mjs", "cjs"])?;
+            }
+        }
+        "python" | "python3" => {
+            if args.iter().any(|value| value == "-c") {
+                return Err("Inline Python code is blocked.".to_string());
+            }
+            if let Some(index) = args.iter().position(|value| value == "-m") {
+                let module = args.get(index + 1).map(String::as_str).unwrap_or("");
+                if !matches!(module, "pytest" | "unittest" | "compileall") {
+                    return Err("Python -m is limited to pytest, unittest, and compileall.".to_string());
+                }
+            } else if !first.is_empty() && !first.starts_with('-') {
+                validate_project_script(grant, &first, &["py"])?;
+            }
+        }
+        "npm" | "pnpm" | "yarn" => {
+            const ALLOWED: &[&str] = &["", "test", "run", "exec", "version", "list", "why"];
+            if !ALLOWED.contains(&first.as_str()) {
+                return Err("Package manager is limited to project scripts, tests, and inspection.".to_string());
+            }
+        }
+        "npx" => {
+            const ALLOWED: &[&str] = &[
+                "tsc", "eslint", "prettier", "vite", "vitest", "jest", "playwright",
+                "tailwindcss",
+            ];
+            if !ALLOWED.contains(&first.as_str()) {
+                return Err("npx may run only an approved development tool.".to_string());
+            }
+        }
+        "bun" => {
+            if !["", "test", "run", "build", "x"].contains(&first.as_str()) {
+                return Err("Bun is limited to build, test, run, and approved tool tasks.".to_string());
+            }
+        }
+        "deno" => {
+            if !["", "check", "test", "fmt", "lint", "task"].contains(&first.as_str()) {
+                return Err("Deno is limited to check, test, format, lint, and project tasks.".to_string());
+            }
+            if args.iter().any(|value| value.starts_with("--allow-") || value == "-A") {
+                return Err("Deno elevated permission flags are blocked.".to_string());
+            }
+        }
+        "cargo" => {
+            if !["", "check", "test", "build", "fmt", "clippy", "metadata", "run"]
+                .contains(&first.as_str())
+            {
+                return Err("Cargo command is outside the build/test profile.".to_string());
+            }
+        }
+        "go" => {
+            if !["", "test", "build", "fmt", "vet", "list"].contains(&first.as_str()) {
+                return Err("Go command is outside the build/test profile.".to_string());
+            }
+        }
+        "dotnet" => {
+            if !["", "build", "test", "format", "restore", "run"].contains(&first.as_str()) {
+                return Err("dotnet command is outside the build/test profile.".to_string());
+            }
+        }
+        "mvn" | "gradle" => {
+            let lowered = args.join(" ").to_ascii_lowercase();
+            if ["publish", "deploy", "upload", "release"]
+                .iter()
+                .any(|blocked| lowered.split_whitespace().any(|word| word == *blocked))
+            {
+                return Err("Publishing and deployment tasks are blocked.".to_string());
+            }
+        }
+        "ruff" => {
+            if !["", "check", "format", "version"].contains(&first.as_str()) {
+                return Err("Ruff is limited to checking and formatting.".to_string());
+            }
+        }
+        "rustc" => {
+            if let Some(source) = args.iter().find(|value| value.to_ascii_lowercase().ends_with(".rs")) {
+                validate_project_script(grant, source, &["rs"])?;
+            } else if !args.iter().any(|value| value == "--version") {
+                return Err("rustc requires a relative .rs source file.".to_string());
+            }
+        }
+        // These tools operate directly without a shell; general path containment and
+        // the native confirmation remain in force.
+        "pytest" | "java" | "javac" | "tsc" | "eslint" | "prettier" | "vitest" => {}
+        _ => return Err("Command profile is not implemented.".to_string()),
+    }
+    Ok(())
+}
+
+fn resolve_executable(
+    profile: &ProgramProfile,
+    workspace_root: &Path,
+) -> Result<PathBuf, String> {
+    let path_value = env::var_os("PATH").ok_or_else(|| "System PATH is unavailable.".to_string())?;
+    let mut seen = HashSet::new();
+    for directory in env::split_paths(&path_value) {
+        if !directory.is_absolute() {
+            continue;
+        }
+        #[cfg(target_os = "windows")]
+        let names: Vec<&str> = profile.windows_files.to_vec();
+        #[cfg(not(target_os = "windows"))]
+        let names: Vec<&str> = vec![profile.name];
+        for name in names {
+            let candidate = directory.join(name);
+            if !candidate.is_file() {
+                continue;
+            }
+            let Ok(canonical) = fs::canonicalize(candidate) else {
+                continue;
+            };
+            if !seen.insert(canonical.clone()) || canonical.starts_with(workspace_root) {
+                continue;
+            }
+            return Ok(canonical);
+        }
+    }
+    Err(format!(
+        "Approved executable '{}' was not found on PATH outside the workspace.",
+        profile.name
+    ))
+}
+
+fn validate_run_id(run_id: &str) -> Result<(), String> {
+    if run_id.len() < 8
+        || run_id.len() > 96
+        || !run_id
+            .bytes()
+            .all(|value| value.is_ascii_alphanumeric() || value == b'-' || value == b'_')
+    {
+        return Err("runId must be 8-96 ASCII letters, digits, '-' or '_'.".to_string());
+    }
+    Ok(())
+}
+
+fn drain_bounded<R: Read>(mut reader: R) -> (Vec<u8>, bool) {
+    let mut captured = Vec::new();
+    let mut buffer = [0u8; 8 * 1024];
+    let mut truncated = false;
+    loop {
+        let count = match reader.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(count) => count,
+        };
+        let remaining = MAX_OUTPUT_BYTES.saturating_sub(captured.len());
+        let retained = count.min(remaining);
+        captured.extend_from_slice(&buffer[..retained]);
+        if retained < count {
+            truncated = true;
+        }
+    }
+    (captured, truncated)
+}
+
+#[cfg(target_os = "windows")]
+fn terminate_process_tree(child: &mut Child) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    if let Some(system_root) = env::var_os("SystemRoot") {
+        let taskkill = PathBuf::from(system_root).join("System32").join("taskkill.exe");
+        if taskkill.is_file() {
+            let _ = Command::new(taskkill)
+                .args(["/PID", &child.id().to_string(), "/T", "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
+    let _ = child.kill();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn terminate_process_tree(child: &mut Child) {
+    let _ = child.kill();
+}
+
+fn remove_injection_environment(command: &mut Command) {
+    for key in [
+        "NODE_OPTIONS",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "RUSTC_WRAPPER",
+        "RUSTDOC",
+        "GIT_SSH_COMMAND",
+        "GIT_EXTERNAL_DIFF",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+        "BASH_ENV",
+        "ENV",
+        "PROMPT_COMMAND",
+    ] {
+        command.env_remove(key);
+    }
+    command.env("GIT_TERMINAL_PROMPT", "0");
+}
+
+fn execute_command_process(
+    run_id: String,
+    program: String,
+    executable: PathBuf,
+    args: Vec<String>,
+    cwd: PathBuf,
+    timeout_ms: u64,
+    cancel: Arc<AtomicBool>,
+) -> Result<CommandExecutionResult, String> {
+    let started = Instant::now();
+    let mut command = Command::new(&executable);
+    command
+        .args(&args)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    remove_injection_environment(&mut command);
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Cannot start approved command: {error}"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Cannot capture command stdout.".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Cannot capture command stderr.".to_string())?;
+    let stdout_reader = thread::spawn(move || drain_bounded(stdout));
+    let stderr_reader = thread::spawn(move || drain_bounded(stderr));
+
+    let mut timed_out = false;
+    let mut cancelled = false;
+    let exit_status = loop {
+        if cancel.load(Ordering::Acquire) {
+            cancelled = true;
+            terminate_process_tree(&mut child);
+            break child.wait().ok();
+        }
+        if started.elapsed() >= Duration::from_millis(timeout_ms) {
+            timed_out = true;
+            terminate_process_tree(&mut child);
+            break child.wait().ok();
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => thread::sleep(Duration::from_millis(25)),
+            Err(error) => {
+                terminate_process_tree(&mut child);
+                let _ = child.wait();
+                return Err(format!("Cannot monitor approved command: {error}"));
+            }
+        }
+    };
+
+    let (stdout, stdout_truncated) = stdout_reader
+        .join()
+        .map_err(|_| "stdout capture worker failed.".to_string())?;
+    let (stderr, stderr_truncated) = stderr_reader
+        .join()
+        .map_err(|_| "stderr capture worker failed.".to_string())?;
+    let mut stdout = String::from_utf8_lossy(&stdout).to_string();
+    let mut stderr = String::from_utf8_lossy(&stderr).to_string();
+    if stdout_truncated {
+        stdout.push_str("\n...[stdout truncated by FarsiAI Codex]");
+    }
+    if stderr_truncated {
+        stderr.push_str("\n...[stderr truncated by FarsiAI Codex]");
+    }
+    Ok(CommandExecutionResult {
+        run_id,
+        program,
+        executable_path: path_for_display(&executable),
+        stdout,
+        stderr,
+        exit_code: exit_status.and_then(|status| status.code()),
+        duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+        timed_out,
+        cancelled,
+        output_truncated: stdout_truncated || stderr_truncated,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn codex_run_command(
+    workspace_id: String,
+    run_id: String,
+    program: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    timeout_ms: Option<u64>,
+    reason: Option<String>,
+    app: AppHandle,
+    state: State<'_, CodexState>,
+) -> Result<CommandExecutionResult, String> {
+    validate_run_id(&run_id)?;
+    let normalized_program = program.trim().to_ascii_lowercase();
+    if normalized_program != program.trim()
+        || normalized_program.is_empty()
+        || !normalized_program
+            .bytes()
+            .all(|value| value.is_ascii_lowercase() || value.is_ascii_digit())
+    {
+        return Err("Program must be an exact lowercase executable profile name.".to_string());
+    }
+    let profile = program_profile(&normalized_program)
+        .ok_or_else(|| "Program is not in the Codex command profile allowlist.".to_string())?;
+    let grant = get_workspace(&state, &workspace_id)?;
+    validate_command_profile(&profile, &args, &grant)?;
+    let requested_cwd = cwd.unwrap_or_default();
+    let (working_directory, normalized_cwd) =
+        resolve_existing(&grant, &requested_cwd, true)?;
+    if !working_directory.is_dir() {
+        return Err("Command working directory is not a directory.".to_string());
+    }
+    let timeout_ms = timeout_ms.unwrap_or(120_000);
+    if !(MIN_COMMAND_TIMEOUT_MS..=MAX_COMMAND_TIMEOUT_MS).contains(&timeout_ms) {
+        return Err(format!(
+            "timeoutMs must be between {MIN_COMMAND_TIMEOUT_MS} and {MAX_COMMAND_TIMEOUT_MS}."
+        ));
+    }
+    let executable = resolve_executable(&profile, &grant.root)?;
+    let wrapper = executable
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
+        });
+    validate_process_args(&args, wrapper)?;
+    let executable_metadata = fs::metadata(&executable)
+        .map_err(|error| format!("Cannot inspect approved executable: {error}"))?;
+    let executable_identity = (executable_metadata.len(), modified_ms(&executable_metadata));
+    let args_preview = if args.is_empty() {
+        "(Ø¨Ø¯ÙˆÙ† Ø¢Ø±Ú¯ÙˆÙ…Ø§Ù†)".to_string()
+    } else {
+        args.iter()
+            .map(|value| capped_detail(value))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let reason = reason
+        .filter(|value| !value.trim().is_empty())
+        .map(capped_detail)
+        .unwrap_or_else(|| "Ø¨Ø±Ø±Ø³ÛŒ ÛŒØ§ ØªØ³Øª Ù¾Ø±ÙˆÚ˜Ù‡ ØªÙˆØ³Ø· Codex".to_string());
+    if !native_confirm(
+        &app,
+        "FarsiAI Codex â€” ØªØ£ÛŒÛŒØ¯ Ø§Ø¬Ø±Ø§ÛŒ Ø¯Ø³ØªÙˆØ±",
+        format!(
+            "Codex Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ ÛŒÚ© Ø¯Ø³ØªÙˆØ± Ú©Ù†ØªØ±Ù„â€ŒØ´Ø¯Ù‡ Ø§Ø¬Ø±Ø§ Ú©Ù†Ø¯:\n\nÙ¾Ø±ÙˆÙØ§ÛŒÙ„: {}\nÙØ§ÛŒÙ„ Ø§Ø¬Ø±Ø§ÛŒÛŒ: {}\nÙ¾ÙˆØ´Ù‡: {}\nØ¢Ø±Ú¯ÙˆÙ…Ø§Ù†â€ŒÙ‡Ø§: {}\nÙ…Ù‡Ù„Øª: {} Ø«Ø§Ù†ÛŒÙ‡\nØ¯Ù„ÛŒÙ„: {}\n\nÙ¾ÙˆØ³ØªÙ‡Ù” Ø¢Ø²Ø§Ø¯ Ùˆ ÙˆØ±ÙˆØ¯ÛŒ ØªØ¹Ø§Ù…Ù„ÛŒ ØºÛŒØ±ÙØ¹Ø§Ù„ Ø§Ø³Øª.",
+            profile.label,
+            path_for_display(&executable),
+            normalize_relative_for_result(&normalized_cwd),
+            args_preview,
+            timeout_ms / 1_000,
+            reason
+        ),
+    ) {
+        push_audit(
+            &state,
+            "command.run",
+            "cancelled",
+            Some(&workspace_id),
+            Some(&normalized_program),
+            Some(format!("run {run_id}")),
+        );
+        return Err("Command execution was cancelled by the user.".to_string());
+    }
+
+    let canonical_executable = fs::canonicalize(&executable)
+        .map_err(|_| "Executable disappeared while permission was being confirmed.".to_string())?;
+    let refreshed_metadata = fs::metadata(&canonical_executable)
+        .map_err(|error| format!("Cannot re-check approved executable: {error}"))?;
+    if canonical_executable != executable
+        || (refreshed_metadata.len(), modified_ms(&refreshed_metadata)) != executable_identity
+    {
+        return Err("Executable changed while permission was being confirmed; run aborted.".to_string());
+    }
+    let refreshed_cwd = fs::canonicalize(&working_directory)
+        .map_err(|_| "Working directory disappeared before command execution.".to_string())?;
+    ensure_contained(&grant.root, &refreshed_cwd)?;
+
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let mut runs = state.runs.lock().map_err(|_| lock_error("Command run"))?;
+        if runs.contains_key(&run_id) {
+            return Err("runId is already active.".to_string());
+        }
+        runs.insert(
+            run_id.clone(),
+            ActiveRun {
+                cancel: cancel.clone(),
+            },
+        );
+    }
+    push_audit(
+        &state,
+        "command.run",
+        "started",
+        Some(&workspace_id),
+        Some(&normalized_program),
+        Some(format!("run {run_id}")),
+    );
+
+    let worker_run_id = run_id.clone();
+    let worker_program = normalized_program.clone();
+    let worker_executable = executable.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        execute_command_process(
+            worker_run_id,
+            worker_program,
+            worker_executable,
+            args,
+            refreshed_cwd,
+            timeout_ms,
+            cancel,
+        )
+    })
+    .await
+    .map_err(|error| format!("Command worker failed: {error}"));
+    if let Ok(mut runs) = state.runs.lock() {
+        runs.remove(&run_id);
+    }
+    let result = result??;
+    let outcome = if result.cancelled {
+        "cancelled"
+    } else if result.timed_out {
+        "timed_out"
+    } else if result.exit_code == Some(0) {
+        "completed"
+    } else {
+        "failed"
+    };
+    push_audit(
+        &state,
+        "command.run",
+        outcome,
+        Some(&workspace_id),
+        Some(&normalized_program),
+        Some(format!(
+            "run {run_id}, exit {:?}, {} ms",
+            result.exit_code, result.duration_ms
+        )),
+    );
+    Ok(result)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn codex_cancel_run(
+    run_id: String,
+    state: State<'_, CodexState>,
+) -> Result<CancelRunResult, String> {
+    validate_run_id(&run_id)?;
+    let found = {
+        let runs = state.runs.lock().map_err(|_| lock_error("Command run"))?;
+        if let Some(active) = runs.get(&run_id) {
+            active.cancel.store(true, Ordering::Release);
+            true
+        } else {
+            false
+        }
+    };
+    push_audit(
+        &state,
+        "command.cancel",
+        if found { "requested" } else { "not_found" },
+        None,
+        Some(&run_id),
+        None,
+    );
+    Ok(CancelRunResult { run_id, found })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn codex_list_audit(
+    limit: Option<usize>,
+    state: State<'_, CodexState>,
+) -> Result<Vec<AuditEvent>, String> {
+    let limit = limit.unwrap_or(100);
+    if limit == 0 || limit > MAX_AUDIT_EVENTS {
+        return Err(format!("limit must be between 1 and {MAX_AUDIT_EVENTS}."));
+    }
+    let events = state.audit.lock().map_err(|_| lock_error("Audit"))?;
+    Ok(events.iter().rev().take(limit).cloned().collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temporary_workspace(label: &str) -> PathBuf {
+        let path = env::temp_dir().join(format!("farsiai-codex-broker-{label}-{}", new_id("test")));
+        fs::create_dir_all(&path).expect("create temporary workspace");
+        fs::canonicalize(path).expect("canonical temporary workspace")
+    }
+
+    #[test]
+    fn relative_path_rejects_all_traversal_and_absolute_forms() {
+        for blocked in [
+            "../outside.txt",
+            "safe/../../outside.txt",
+            r"safe\..\outside.txt",
+            r"C:\outside.txt",
+            r"\\server\share\file.txt",
+            "/etc/passwd",
+            "safe//file.txt",
+            r"safe\\file.txt",
+        ] {
+            assert!(
+                validate_relative_path(blocked, false).is_err(),
+                "must reject {blocked:?}"
+            );
+        }
+        assert!(validate_relative_path("src/components/App.tsx", false).is_ok());
+    }
+
+    #[test]
+    fn relative_path_rejects_ntfs_alternate_data_streams() {
+        for blocked in ["notes.txt:payload", "folder/file.js:$DATA", "a:b:c"] {
+            let error = validate_relative_path(blocked, false).expect_err("ADS must be rejected");
+            assert!(error.contains("ADS") || error.contains("drive"));
+        }
+    }
+
+    #[test]
+    fn relative_path_rejects_windows_device_names_and_aliases() {
+        for blocked in [
+            "CON",
+            "con.txt",
+            "folder/AUX.json",
+            "NUL ",
+            "COM1.log",
+            "lpt9",
+            "CLOCK$",
+            "dir/CONOUT$.txt",
+        ] {
+            assert!(
+                validate_relative_path(blocked, false).is_err(),
+                "must reject Windows device {blocked:?}"
+            );
+        }
+        assert!(validate_relative_path("company.txt", false).is_ok());
+        assert!(validate_relative_path("com10.txt", false).is_ok());
+    }
+
+    #[test]
+    fn secret_paths_are_blocked_but_templates_remain_readable() {
+        for blocked in [
+            ".env",
+            ".env.production",
+            ".ssh/id_ed25519",
+            "config/credentials.json",
+            ".git/config",
+            "certificates/server.pem",
+            "private/signing.key",
+        ] {
+            assert!(
+                validate_relative_path(blocked, false).is_err(),
+                "must reject secret path {blocked:?}"
+            );
+        }
+        assert!(validate_relative_path(".env.example", false).is_ok());
+        assert!(validate_relative_path("docs/credentials-guide.md", false).is_ok());
+    }
+
+    #[test]
+    fn expected_sha256_detects_stale_and_missing_versions() {
+        let original = b"original content";
+        let actual = sha256_bytes(original);
+        assert_eq!(
+            verify_expected_hash(Some(original), Some(&actual)).expect("matching hash"),
+            Some(actual)
+        );
+        assert!(verify_expected_hash(Some(original), None).is_err());
+        assert!(verify_expected_hash(Some(original), Some(&"0".repeat(64))).is_err());
+        assert!(verify_expected_hash(None, Some(&sha256_bytes(b"missing"))).is_err());
+        assert_eq!(verify_expected_hash(None, None).expect("new file"), None);
+    }
+
+    #[test]
+    fn mutation_resolution_cannot_leave_the_granted_workspace() {
+        let root = temporary_workspace("containment");
+        let outside = temporary_workspace("outside");
+        let grant = WorkspaceGrant {
+            id: "ws_test_grant".to_string(),
+            root: root.clone(),
+            name: "test".to_string(),
+            granted_at_ms: now_ms(),
+        };
+        let allowed = resolve_mutation_target(&grant, "inside.txt").expect("inside target");
+        assert!(allowed.0.starts_with(&root));
+        assert!(ensure_contained(&root, &outside).is_err());
+        fs::remove_dir_all(root).expect("cleanup root");
+        fs::remove_dir_all(outside).expect("cleanup outside");
+    }
+
+    #[test]
+    fn atomicish_write_replaces_content_without_staging_files() {
+        let root = temporary_workspace("atomic");
+        let target = root.join("file.txt");
+        fs::write(&target, "before").expect("seed file");
+        write_atomicish(&target, b"after", "unit-test").expect("atomic replacement");
+        assert_eq!(fs::read_to_string(&target).expect("read target"), "after");
+        assert!(!root.join(".farsiai-codex-unit-test.new").exists());
+        assert!(!root.join(".farsiai-codex-unit-test.old").exists());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn command_run_ids_are_strict_and_script_profiles_reject_inline_code() {
+        assert!(validate_run_id("run_12345678").is_ok());
+        assert!(validate_run_id("short").is_err());
+        assert!(validate_run_id("run has spaces").is_err());
+
+        let root = temporary_workspace("command-profile");
+        let grant = WorkspaceGrant {
+            id: "ws_command_test".to_string(),
+            root: root.clone(),
+            name: "test".to_string(),
+            granted_at_ms: now_ms(),
+        };
+        let node = program_profile("node").expect("node profile");
+        assert!(validate_command_profile(&node, &["-e".to_string(), "process.exit()".to_string()], &grant).is_err());
+        let git = program_profile("git").expect("git profile");
+        assert!(validate_command_profile(&git, &["clean".to_string(), "-fdx".to_string()], &grant).is_err());
+        assert!(validate_command_profile(&git, &["status".to_string()], &grant).is_ok());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+}

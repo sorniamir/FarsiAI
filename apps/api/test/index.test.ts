@@ -100,7 +100,7 @@ describe('FarsiAI Worker', () => {
       assert.equal(input.language, 'fa');
       assert.equal(input.task, 'transcribe');
       assert.equal(input.vad_filter, true);
-      return { text: 'Ø³Ù„Ø§Ù…ØŒ ÙˆØ¶Ø¹ÛŒØª Ù¾Ø±ÙˆÚ˜Ù‡ Ø±Ø§ Ø¨Ø±Ø±Ø³ÛŒ Ú©Ù†.' };
+      return { text: 'سلام، وضعیت پروژه را بررسی کن.' };
     });
     const env = createEnv({ AI: { run: aiRun } });
     const audio = Buffer.from('a'.repeat(256)).toString('base64');
@@ -113,7 +113,7 @@ describe('FarsiAI Worker', () => {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       ok: true,
-      text: 'Ø³Ù„Ø§Ù…ØŒ ÙˆØ¶Ø¹ÛŒØª Ù¾Ø±ÙˆÚ˜Ù‡ Ø±Ø§ Ø¨Ø±Ø±Ø³ÛŒ Ú©Ù†.',
+      text: 'سلام، وضعیت پروژه را بررسی کن.',
       model: '@cf/openai/whisper-large-v3-turbo',
       requestId: 'voice-test-ray',
     });
@@ -138,7 +138,7 @@ describe('FarsiAI Worker', () => {
     const pcm = Buffer.from([0, 0, 20, 0, 40, 0, 20, 0]);
     const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
       assert.equal(model, 'google/gemini-3.1-flash-tts');
-      assert.equal(input.text, 'Ù¾Ø§Ø³Ø® Ø¢Ø²Ù…Ø§ÛŒØ´ÛŒ ÙØ§Ø±Ø³ÛŒ');
+      assert.equal(input.text, 'پاسخ آزمایشی فارسی');
       assert.equal(input.voice, 'Kore');
       return {
         audio: `data:audio/L16;codec=pcm;rate=24000;base64,${pcm.toString('base64')}`,
@@ -148,7 +148,7 @@ describe('FarsiAI Worker', () => {
     const env = createEnv({ AI: { run: aiRun } });
 
     const response = await worker.fetch(ttsRequest(
-      { text: 'Ù¾Ø§Ø³Ø® Ø¢Ø²Ù…Ø§ÛŒØ´ÛŒ ÙØ§Ø±Ø³ÛŒ', language: 'fa' },
+      { text: 'پاسخ آزمایشی فارسی', language: 'fa' },
       { 'cf-connecting-ip': '203.0.113.21', 'cf-ray': 'tts-test-ray' },
     ), env);
 
@@ -165,7 +165,7 @@ describe('FarsiAI Worker', () => {
 
   it('reports an upstream error when the unified Persian TTS model is unavailable', async () => {
     const env = createEnv({ AI: { run: mock.fn(async () => { throw new Error('model unavailable'); }) } });
-    const response = await worker.fetch(ttsRequest({ text: 'Ø³Ù„Ø§Ù…' }), env);
+    const response = await worker.fetch(ttsRequest({ text: 'سلام' }), env);
 
     assert.equal(response.status, 502);
     assert.equal((await response.json() as { code: string }).code, 'VOICE_TTS_FAILED');
@@ -199,7 +199,7 @@ describe('FarsiAI Worker', () => {
 
     const response = await worker.fetch(
       agentRequest(
-        { task: 'package.json Ø±Ø§ Ø¨Ø®ÙˆØ§Ù†', workspace: 'approved-workspace', observations: [] },
+        { task: 'package.json را بخوان', workspace: 'approved-workspace', observations: [] },
         { authorization: 'Bearer user-access-token', 'cf-ray': 'codex-test-ray' },
       ),
       env,
@@ -263,7 +263,7 @@ describe('FarsiAI Worker', () => {
     );
 
     assert.equal(response.status, 402);
-    assert.match((await response.json() as { error: string }).error, /Ûµ Ù¾ÛŒØ§Ù…/);
+    assert.match((await response.json() as { error: string }).error, /۵ پیام/);
     assert.equal(env.AI.run.mock.callCount(), 0);
   });
 
@@ -274,8 +274,8 @@ describe('FarsiAI Worker', () => {
       AI: {
         run: mock.fn(async () => ({
           response: call++ === 0
-            ? 'Ú†Ø´Ù…â€ŒÙ‡Ø§ Ù…Ø§ Ø¨Ù‡ Ù†ÙˆØ± Ø¢Ø¨ÛŒ Ø­Ø³Ø§Ø³â€ŒØªØ± Ù‡Ø³ØªÙ†Ø¯.'
-            : 'Ú†Ø´Ù…â€ŒÙ‡Ø§ÛŒ Ù…Ø§ Ø¨Ù‡ Ù†ÙˆØ± Ø¢Ø¨ÛŒ Ø­Ø³Ø§Ø³â€ŒØªØ±Ù†Ø¯.',
+            ? 'چشم‌ها ما به نور آبی حساس‌تر هستند.'
+            : 'چشم‌های ما به نور آبی حساس‌ترند.',
         })),
       },
     });
@@ -283,24 +283,24 @@ describe('FarsiAI Worker', () => {
     const response = await worker.fetch(
       aiRequest({
         mode: 'chat',
-        message: 'Ú†Ø±Ø§ Ø¢Ø³Ù…Ø§Ù† Ø¢Ø¨ÛŒ Ø§Ø³ØªØŸ',
-        history: [{ role: 'assistant', content: 'Ù‚Ø¨Ù„Ø§Ù‹ Ø¯Ø±Ø¨Ø§Ø±Ù‡ Ù†ÙˆØ± ØµØ­Ø¨Øª Ú©Ø±Ø¯ÛŒÙ….' }],
+        message: 'چرا آسمان آبی است؟',
+        history: [{ role: 'assistant', content: 'قبلاً درباره نور صحبت کردیم.' }],
       }),
       env,
     );
 
     assert.equal(response.status, 200);
-    assert.equal((await response.json() as { text: string }).text, 'Ú†Ø´Ù…â€ŒÙ‡Ø§ÛŒ Ù…Ø§ Ø¨Ù‡ Ù†ÙˆØ± Ø¢Ø¨ÛŒ Ø­Ø³Ø§Ø³â€ŒØªØ±Ù†Ø¯.');
+    assert.equal((await response.json() as { text: string }).text, 'چشم‌های ما به نور آبی حساس‌ترند.');
     assert.equal(env.AI.run.mock.callCount(), 2);
     const [model, input] = env.AI.run.mock.calls[0].arguments as [string, { messages: Array<{ role: string; content: string }> }];
     assert.equal(model, '@cf/qwen/qwen3-30b-a3b-fp8');
-    assert.equal(input.messages.at(-1)?.content, 'Ú†Ø±Ø§ Ø¢Ø³Ù…Ø§Ù† Ø¢Ø¨ÛŒ Ø§Ø³ØªØŸ');
-    assert.ok(input.messages.some((item) => item.content === 'Ù‚Ø¨Ù„Ø§Ù‹ Ø¯Ø±Ø¨Ø§Ø±Ù‡ Ù†ÙˆØ± ØµØ­Ø¨Øª Ú©Ø±Ø¯ÛŒÙ….'));
+    assert.equal(input.messages.at(-1)?.content, 'چرا آسمان آبی است؟');
+    assert.ok(input.messages.some((item) => item.content === 'قبلاً درباره نور صحبت کردیم.'));
 
     const [reviewModel, reviewInput] = env.AI.run.mock.calls[1].arguments as [string, { messages: Array<{ role: string; content: string }> }];
     assert.equal(reviewModel, '@cf/openai/gpt-oss-120b');
-    assert.match(reviewInput.messages.at(-1)?.content ?? '', /Ú†Ø´Ù…â€ŒÙ‡Ø§ Ù…Ø§/);
-    assert.match(reviewInput.messages.at(-1)?.content ?? '', /Ú†Ø±Ø§ Ø¢Ø³Ù…Ø§Ù† Ø¢Ø¨ÛŒ Ø§Ø³Øª/);
+    assert.match(reviewInput.messages.at(-1)?.content ?? '', /چشم‌ها ما/);
+    assert.match(reviewInput.messages.at(-1)?.content ?? '', /چرا آسمان آبی است/);
   });
 
   it('returns the original Persian answer if the language review is unavailable', async () => {
@@ -309,23 +309,23 @@ describe('FarsiAI Worker', () => {
     const env = guestQuotaEnv({
       AI: {
         run: mock.fn(async () => {
-          if (call++ === 0) return { response: 'Ù¾Ø§Ø³Ø® ÙØ§Ø±Ø³ÛŒ Ø§ÙˆÙ„ÛŒÙ‡.' };
+          if (call++ === 0) return { response: 'پاسخ فارسی اولیه.' };
           throw new Error('review unavailable');
         }),
       },
     });
 
-    const response = await worker.fetch(aiRequest({ mode: 'chat', message: 'ÛŒÚ© Ù¾Ø§Ø³Ø® ÙØ§Ø±Ø³ÛŒ Ø¨Ø¯Ù‡.' }), env);
+    const response = await worker.fetch(aiRequest({ mode: 'chat', message: 'یک پاسخ فارسی بده.' }), env);
 
     assert.equal(response.status, 200);
-    assert.equal((await response.json() as { text: string }).text, 'Ù¾Ø§Ø³Ø® ÙØ§Ø±Ø³ÛŒ Ø§ÙˆÙ„ÛŒÙ‡.');
+    assert.equal((await response.json() as { text: string }).text, 'پاسخ فارسی اولیه.');
     assert.equal(env.AI.run.mock.callCount(), 2);
   });
 
   it('removes hidden reasoning and raw Markdown from assistant text', () => {
-    const raw = '<think>internal reasoning</think>\n\n**Ù¾Ø§Ø³Ø® Ø±ÙˆØ´Ù†**  \n* Ù…ÙˆØ±Ø¯ Ø§ÙˆÙ„\nÙ…ØªÙ† _Ø³Ø§Ø¯Ù‡_ Ùˆ `Ø¯Ù‚ÛŒÙ‚`.';
+    const raw = '<think>internal reasoning</think>\n\n**پاسخ روشن**  \n* مورد اول\nمتن _ساده_ و `دقیق`.';
 
-    assert.equal(normalizeAssistantText(raw), 'Ù¾Ø§Ø³Ø® Ø±ÙˆØ´Ù†\nâ€¢ Ù…ÙˆØ±Ø¯ Ø§ÙˆÙ„\nÙ…ØªÙ† Ø³Ø§Ø¯Ù‡ Ùˆ Ø¯Ù‚ÛŒÙ‚.');
+    assert.equal(normalizeAssistantText(raw), 'پاسخ روشن\n• مورد اول\nمتن ساده و دقیق.');
   });
 
   it('stops rate-limited requests before invoking Workers AI', async () => {
@@ -449,4 +449,3 @@ describe('Supabase admin authentication', () => {
     assert.deepEqual(result, { ok: false, reason: 'chat_limit' });
   });
 });
-
