@@ -4,8 +4,13 @@ use std::time::Duration;
 
 const CODEX_ENDPOINT: &str = "https://farsiai-api.sorniamir2005.workers.dev/v2/codex/turn";
 const CODEX_PROTOCOL: &str = "farsiai.codex.desktop.v2";
+const CODEX_CLIENT_FLAVOR: &str = "codex-studio";
 const MAX_REQUEST_BYTES: usize = 5_000_000;
 const MAX_RESPONSE_BYTES: usize = 5_000_000;
+
+fn codex_client_header() -> String {
+    format!("desktop/{}-{CODEX_CLIENT_FLAVOR}", env!("CARGO_PKG_VERSION"))
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +40,7 @@ pub async fn codex_api_turn(
     let mut request = client
         .post(CODEX_ENDPOINT)
         .header(CONTENT_TYPE, "application/json")
-        .header("x-farsiai-client", "desktop/0.5.0-codex-studio")
+        .header("x-farsiai-client", codex_client_header())
         .header("x-farsiai-codex-protocol", CODEX_PROTOCOL)
         .body(body);
 
@@ -65,6 +70,11 @@ pub async fn codex_api_turn(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_client_header_tracks_the_release_version() {
+        assert_eq!(codex_client_header(), "desktop/0.5.1-codex-studio");
+    }
 
     #[test]
     fn native_transport_reaches_the_live_codex_route() {
