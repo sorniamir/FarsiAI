@@ -29,7 +29,7 @@ function body(observations: unknown[] = []) {
     task: 'فایل package.json را بررسی کن و فقط در صورت نیاز قدم بعدی را پیشنهاد بده.',
     workspace: { boundary: 'approved-workspace', label: 'Codex v2 test workspace' },
     observations,
-    client: { kind: 'desktop', version: '0.5.1', locale: 'fa-IR' },
+    client: { kind: 'desktop', version: '0.5.3', locale: 'fa-IR' },
     capabilities: {
       protocol: 'farsiai.codex.desktop.v2',
       tools: [{ name: 'read_file', permission: 'automatic' }],
@@ -137,4 +137,58 @@ describe('Codex Studio v2 free-plan planner', () => {
     assert.match(payload.message, /فایل بررسی شد/);
     assert.equal(payload.model, '@cf/openai/gpt-oss-120b');
   });
+
+  it('accepts an empty write_file payload when the task is to create an empty file', async () => {
+    authenticate();
+    const payload: any = body();
+    payload.task = 'یک فایل document.txt خالی بساز';
+    payload.client.version = '0.5.3';
+    payload.capabilities.tools = [{ name: 'write_file', permission: 'ask' }];
+    const aiRun = mock.fn(async () => ({
+      output: [{
+        type: 'function_call',
+        call_id: 'fc-create-empty',
+        name: 'write_file',
+        arguments: '{"path":"document.txt","content":""}',
+      }],
+    }));
+
+    const response = await handleCodexTurn(request(payload), envWith(aiRun));
+    assert.equal(response.status, 200);
+    const result = await response.json() as any;
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'tool');
+    assert.equal(result.tool.name, 'write_file');
+    assert.equal(result.tool.arguments.path, 'document.txt');
+    assert.equal(result.tool.arguments.content, '');
+    assert.equal(aiRun.mock.callCount(), 1);
+  });
+
+  it('repairs an invalid model tool proposal before returning anything to the desktop', async () => {
+    authenticate();
+    const payload: any = body();
+    payload.task = 'یک فایل متنی با نام FarsiAI بساز';
+    payload.client.version = '0.5.3';
+    payload.capabilities.tools = [{ name: 'write_file', permission: 'ask' }];
+    let calls = 0;
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      calls += 1;
+      if (calls === 1) {
+        return { output: [{ type: 'function_call', call_id: 'bad-create', name: 'create_file', arguments: '{"path":"FarsiAI.txt"}' }] };
+      }
+      assert.match(input.messages.at(-1).content, /PLANNER VALIDATION ERROR/);
+      return { output: [{ type: 'function_call', call_id: 'fixed-write', name: 'write_file', arguments: '{"path":"FarsiAI.txt","content":""}' }] };
+    });
+
+    const response = await handleCodexTurn(request(payload), envWith(aiRun));
+    assert.equal(response.status, 200);
+    const result = await response.json() as any;
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'tool');
+    assert.equal(result.tool.name, 'write_file');
+    assert.equal(result.tool.arguments.path, 'FarsiAI.txt');
+    assert.equal(result.tool.arguments.content, '');
+    assert.equal(calls, 2);
+  });
+
 });
