@@ -1,5 +1,5 @@
 name = "farsiai-api"
-main = "src/index.ts"
+main = "src/codex-ci-probe.ts"
 compatibility_date = "2026-08-10"
 compatibility_flags = ["nodejs_compat"]
 keep_vars = true
