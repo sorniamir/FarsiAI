@@ -278,6 +278,7 @@ export async function handleCodexTurn(request: Request, env: Env): Promise<Respo
     }
     const auth = await resolveAuth(request, env);
     if (auth.kind !== 'user') return json(env, { ok: false, error: 'برای استفاده از Codex وارد حساب شوید.', code: 'CODEX_LOGIN_REQUIRED', requestId }, 401);
+    if (auth.user.banned) return json(env, { ok: false, error: 'این حساب توسط مدیریت FarsiAI مسدود شده است.', code: 'CODEX_ACCOUNT_BANNED', requestId }, 403);
     let payload: Record<string, unknown>;
     try { payload = await request.json() as Record<string, unknown>; }
     catch { return json(env, { ok: false, error: 'درخواست Codex معتبر نیست.', code: 'CODEX_INVALID_JSON', requestId }, 400); }
