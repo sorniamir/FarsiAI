@@ -287,6 +287,25 @@ async function detail(env: Env, userId: string) {
   };
 }
 
+async function assertTargetMutationAllowed(
+  env: Env,
+  authz: AdminContext,
+  targetId: string,
+  action: string,
+  payload: Record<string, unknown>,
+) {
+  if (authz.bootstrap) return;
+
+  const targetPayload = await authJson<{ user?: AuthUser } | AuthUser>(env, `users/${targetId}`);
+  const target = 'user' in rec(targetPayload) ? (targetPayload as { user?: AuthUser }).user : targetPayload as AuthUser;
+  if (!target?.id) throw new Error('USER_NOT_FOUND');
+  if (target.email && adminEmailSet(env).has(target.email.toLowerCase())) throw new Error('OWNER_PROTECTED');
+
+  const targetAccess = await getAccountAccess(env, targetId);
+  if (targetAccess.plan === 'admin') throw new Error('ADMIN_ACCOUNT_PROTECTED');
+  if (action === 'plan' && payload.plan === 'admin') throw new Error('OWNER_ONLY_ADMIN_GRANT');
+}
+
 async function setPlan(env: Env, actor: VerifiedUser, targetId: string, payload: Record<string, unknown>) {
   const plan = payload.plan;
   if (typeof plan !== 'string' || !PLANS.has(plan as AccountPlan)) throw new Error('INVALID_PLAN');
@@ -397,6 +416,7 @@ export async function handleAdminRequest(request: Request, env: Env): Promise<Re
     if (request.method !== 'POST' || !action) return json(env, { ok: false, error: 'متد درخواست مدیریت معتبر نیست.' }, 405);
 
     const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
+    await assertTargetMutationAllowed(env, authz, targetId, action, payload);
     if (action === 'plan') return json(env, { ok: true, ...(await setPlan(env, authz.user, targetId, payload)) });
     if (action === 'credits') return json(env, { ok: true, ...(await adjustCredits(env, authz.user, targetId, payload)) });
     if (action === 'reset-usage') return json(env, { ok: true, usage: await resetUsage(env, authz.user, targetId) });
@@ -412,8 +432,13 @@ export async function handleAdminRequest(request: Request, env: Env): Promise<Re
       INVALID_CREDIT_BALANCE: 'موجودی نهایی باید بین صفر و دو میلیارد باشد.',
       CREDIT_CONFLICT: 'موجودی کاربر هم‌زمان تغییر کرد؛ دوباره تلاش کنید.',
       SELF_BAN_FORBIDDEN: 'برای جلوگیری از قفل‌شدن پنل، نمی‌توانید حساب خودتان را Ban کنید.',
+      OWNER_PROTECTED: 'حساب Owner اصلی فقط توسط خود Owner قابل مدیریت است.',
+      ADMIN_ACCOUNT_PROTECTED: 'حساب‌های Admin فقط توسط Owner اصلی قابل تغییر هستند.',
+      OWNER_ONLY_ADMIN_GRANT: 'فقط Owner اصلی می‌تواند دسترسی Admin اعطا کند.',
       USER_NOT_FOUND: 'کاربر پیدا نشد.',
     };
-    return json(env, { ok: false, error: messages[code] || 'عملیات مدیریت انجام نشد. دوباره تلاش کنید.' }, code === 'USER_NOT_FOUND' ? 404 : 500);
+    const forbidden = new Set(['SELF_BAN_FORBIDDEN', 'OWNER_PROTECTED', 'ADMIN_ACCOUNT_PROTECTED', 'OWNER_ONLY_ADMIN_GRANT']);
+    const status = code === 'USER_NOT_FOUND' ? 404 : forbidden.has(code) ? 403 : 500;
+    return json(env, { ok: false, error: messages[code] || 'عملیات مدیریت انجام نشد. دوباره تلاش کنید.' }, status);
   }
 }
