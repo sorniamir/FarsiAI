@@ -1,0 +1,31 @@
+name: Codex v0.5.1 Production Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/codex-v051-production-deploy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3de3330915464b00a478e829d78d313a
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Require configured Cloudflare token
+        shell: bash
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "CLOUDFLARE_API_TOKEN secret is not configured." >&2
+            exit 1
+          fi
+      - name: Deploy FarsiAI API
+        run: npm --workspace apps/api run deploy
