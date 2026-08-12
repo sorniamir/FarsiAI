@@ -1,0 +1,227 @@
+name: Apply Codex approval hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/codex-approval-hotfix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Apply deterministic Codex approval fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, got {text.count(old)} for: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # 1) Native broker: missing model hash means "derive current hash locally",
+          # then re-check that exact hash after the OS confirmation to retain TOCTOU protection.
+          replace_once(
+              'apps/desktop/src-tauri/src/codex_broker.rs',
+              '''            let supplied = expected
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "expectedSha256 is required when replacing an existing file.".to_string())?;
+            if supplied.len() != 64 || !supplied.bytes().all(|value| value.is_ascii_hexdigit()) {
+                return Err("expectedSha256 must be a 64-character SHA-256 value.".to_string());
+            }
+            if !actual.eq_ignore_ascii_case(supplied) {
+                return Err(format!(
+                    "File changed since it was read (SHA-256 conflict; current hash is {actual})."
+                ));
+            }
+            Ok(Some(actual))''',
+              '''            if let Some(supplied) = expected.filter(|value| !value.trim().is_empty()) {
+                if supplied.len() != 64 || !supplied.bytes().all(|value| value.is_ascii_hexdigit()) {
+                    return Err("expectedSha256 must be a 64-character SHA-256 value.".to_string());
+                }
+                if !actual.eq_ignore_ascii_case(supplied) {
+                    return Err(format!(
+                        "File changed since it was read (SHA-256 conflict; current hash is {actual})."
+                    ));
+                }
+            }
+            Ok(Some(actual))'''
+          )
+          replace_once(
+              'apps/desktop/src-tauri/src/codex_broker.rs',
+              '''        verify_expected_hash(Some(&current), expected_sha256.as_deref())?;''',
+              '''        let recheck_expected = expected_sha256.as_deref().or(before_sha256.as_deref());
+        verify_expected_hash(Some(&current), recheck_expected)?;'''
+          )
+          replace_once(
+              'apps/desktop/src-tauri/src/codex_broker.rs',
+              '''mod tests {
+    use super::*;''',
+              '''mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_expected_hash_captures_existing_file_for_safe_recheck() {
+        let bytes = b"existing file";
+        let actual = sha256_bytes(bytes);
+        assert_eq!(verify_expected_hash(Some(bytes), None).unwrap(), Some(actual));
+    }'''
+          )
+
+          # 2) Desktop service: null and undefined both trigger a verified local pre-read;
+          # preserve actual Tauri string errors instead of replacing them with a generic message.
+          replace_once(
+              'apps/desktop/src/services/codex.ts',
+              '''      if (expectedSha256 === undefined) {''',
+              '''      if (expectedSha256 === undefined || expectedSha256 === null) {'''
+          )
+          replace_once(
+              'apps/desktop/src/services/codex.ts',
+              '''    const message = error instanceof Error ? error.message : 'اجرای ابزار محلی ناموفق بود.';''',
+              '''    const message = error instanceof Error
+      ? error.message
+      : typeof error === 'string' && error.trim()
+        ? error
+        : 'اجرای ابزار محلی ناموفق بود.';'''
+          )
+          replace_once(
+              'apps/desktop/src/services/codex.ts',
+              "export const CODEX_CLIENT_VERSION = '0.5.1-codex-studio';",
+              "export const CODEX_CLIENT_VERSION = '0.5.2-codex-studio';"
+          )
+
+          # 3) Codex Studio: never execute/prompt for the exact same already-verified write
+          # or directory creation twice in one run. Re-correlate a verified observation instead.
+          replace_once(
+              'apps/desktop/src/components/CodexStudio.tsx',
+              '''    const observations: CodexObservation[] = [];
+    const approved = new Set<CodexToolName>();
+    try {''',
+              '''    const observations: CodexObservation[] = [];
+    const approved = new Set<CodexToolName>();
+    const completedWrites = new Map<string, { content: string; observation: CodexObservation }>();
+    const completedDirectories = new Map<string, CodexObservation>();
+    try {'''
+          )
+          replace_once(
+              'apps/desktop/src/components/CodexStudio.tsx',
+              '''        if (!await approve(call, approved)) {''',
+              '''        if (call.name === 'write_file') {
+          const completed = completedWrites.get(call.arguments.path);
+          if (completed && completed.content === call.arguments.content) {
+            observations.push({
+              ...completed.observation,
+              callId: call.callId,
+              createdAt: new Date().toISOString(),
+              content: `${completed.observation.content}\\nDuplicate write suppressed locally because the exact content is already verified on disk.`,
+            });
+            setActivity((items) => items.map((item) => item.id === activityId ? {
+              ...item,
+              detail: 'این تغییر قبلاً با موفقیت روی دیسک اعمال و تأیید شده بود؛ اجرای تکراری حذف شد.',
+              state: 'success',
+            } : item));
+            continue;
+          }
+        }
+        if (call.name === 'create_directory') {
+          const completed = completedDirectories.get(call.arguments.path);
+          if (completed) {
+            observations.push({
+              ...completed,
+              callId: call.callId,
+              createdAt: new Date().toISOString(),
+              content: `${completed.content}\\nDuplicate directory creation suppressed locally because it is already verified.`,
+            });
+            setActivity((items) => items.map((item) => item.id === activityId ? {
+              ...item,
+              detail: 'این پوشه قبلاً ساخته و تأیید شده بود؛ اجرای تکراری حذف شد.',
+              state: 'success',
+            } : item));
+            continue;
+          }
+        }
+        if (!await approve(call, approved)) {'''
+          )
+          replace_once(
+              'apps/desktop/src/components/CodexStudio.tsx',
+              '''        observations.push(evidence.observation);
+        setActivity((items) => items.map((item) => item.id === activityId ? { ...item, detail: evidence.summary, state: evidence.observation.status === 'success' ? 'success' : 'error' } : item));''',
+              '''        observations.push(evidence.observation);
+        if (evidence.observation.status === 'success') {
+          if (call.name === 'write_file') {
+            completedWrites.set(call.arguments.path, { content: call.arguments.content, observation: evidence.observation });
+          } else if (call.name === 'create_directory') {
+            completedDirectories.set(call.arguments.path, evidence.observation);
+          }
+        }
+        setActivity((items) => items.map((item) => item.id === activityId ? { ...item, detail: evidence.summary, state: evidence.observation.status === 'success' ? 'success' : 'error' } : item));'''
+          )
+
+          # 4) Planner: do not coerce a missing optimistic hash to null, and explicitly treat
+          # verified local side effects as authoritative completed work.
+          replace_once(
+              'apps/api/src/ai/codex-v2.ts',
+              '''    normalized = { path, content: input.content, expectedSha256: typeof input.expectedSha256 === 'string' ? input.expectedSha256 : null };''',
+              '''    normalized = { path, content: input.content };
+    if (typeof input.expectedSha256 === 'string' && input.expectedSha256.trim()) normalized.expectedSha256 = input.expectedSha256;'''
+          )
+          replace_once(
+              'apps/api/src/ai/codex-v2.ts',
+              '''    'Never claim a change, command, test, launch or completion without a correlated verified tool observation. A nonzero exit code or error/denied/cancelled status is not success.',
+    'After edits, run the most relevant validation when the terminal plugin is enabled. Do not repeat a failed side effect automatically.', ''',
+              '''    'Never claim a change, command, test, launch or completion without a correlated verified tool observation. A nonzero exit code or error/denied/cancelled status is not success.',
+    'A LOCAL TOOL OBSERVATION with status=success and verified=true is authoritative proof that the operation already completed. Never request the same write_file with the same path/content or the same create_directory again; continue to the next distinct step or finalize.',
+    'After edits, run the most relevant validation when the terminal plugin is enabled. Do not repeat a failed side effect automatically.', '''
+          )
+
+          # 5) Release metadata v0.5.2.
+          replace_once('apps/desktop/package.json', '"version": "0.5.1"', '"version": "0.5.2"')
+          replace_once('apps/desktop/src-tauri/Cargo.toml', 'version = "0.5.1"', 'version = "0.5.2"')
+          replace_once('apps/desktop/src-tauri/tauri.conf.json', '"version": "0.5.1"', '"version": "0.5.2"')
+          replace_once(
+              'apps/desktop/src-tauri/src/codex_transport.rs',
+              'assert_eq!(codex_client_header(), "desktop/0.5.1-codex-studio");',
+              'assert_eq!(codex_client_header(), "desktop/0.5.2-codex-studio");'
+          )
+
+          workflow = Path('.github/workflows/desktop-windows.yml')
+          workflow_text = workflow.read_text(encoding='utf-8')
+          if '0.5.1-codex-studio' not in workflow_text or 'v0.5.1' not in workflow_text:
+              raise SystemExit('desktop-windows.yml version markers were not found')
+          workflow.write_text(workflow_text.replace('0.5.1-codex-studio', '0.5.2-codex-studio').replace('v0.5.1', 'v0.5.2'), encoding='utf-8')
+
+          # Remove this one-shot workflow in the same patch commit.
+          Path('.github/workflows/codex-approval-hotfix.yml').unlink()
+          PY
+
+      - name: Refresh lockfiles
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          git config user.name "FarsiAI Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(codex): stabilize write approval lifecycle"
+          git push origin HEAD:main
