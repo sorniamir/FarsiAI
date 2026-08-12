@@ -1,4 +1,4 @@
-# FarsiAI v0.5.1 Codex production deploy marker
+# FarsiAI v0.5.3 production + Admin Control Center
 name = "farsiai-api"
 main = "src/index.ts"
 compatibility_date = "2026-08-10"
@@ -29,4 +29,5 @@ namespace_id = "9203102"
 
 [vars]
 ALLOWED_ORIGIN = "*"
+ADMIN_EMAILS = "sorniamir2005@gmail.com"
 NANO_BANANA_MODEL = "gemini-3.1-flash-lite-image"

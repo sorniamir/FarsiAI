@@ -41,6 +41,7 @@ export type Env = {
   IMAGE_RATE_LIMITER: RateLimitBinding;
   GUEST_QUOTA?: DurableObjectNamespaceBinding;
   ALLOWED_ORIGIN?: string;
+  ADMIN_EMAILS?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;

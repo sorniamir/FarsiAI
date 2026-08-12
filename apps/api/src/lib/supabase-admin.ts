@@ -17,13 +17,16 @@ function adminConfig(env: Env): AdminConfig | null {
   };
 }
 
-/**
- * Calls Supabase's Data API with an elevated server-side key.
- *
- * New `sb_secret_...` keys are sent only in `apikey`. Legacy service-role
- * JWTs also need to be sent as a bearer token so PostgREST receives the
- * `service_role` database role and bypasses RLS as intended.
- */
+function adminHeaders(config: AdminConfig, init: RequestInit): Headers {
+  const headers = new Headers(init.headers);
+  headers.set('apikey', config.key);
+  headers.set('accept', 'application/json');
+  if (config.legacy) headers.set('authorization', `Bearer ${config.key}`);
+  if (init.body !== undefined && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  return headers;
+}
+
+/** Calls Supabase Data API with the server-side secret/service-role key. */
 export function supabaseAdminFetch(
   env: Env,
   path: string,
@@ -31,18 +34,20 @@ export function supabaseAdminFetch(
 ): Promise<Response> | null {
   const config = adminConfig(env);
   if (!config) return null;
+  return fetch(`${config.url}/rest/v1/${path}`, { ...init, headers: adminHeaders(config, init) });
+}
 
-  const headers = new Headers(init.headers);
-  headers.set('apikey', config.key);
-  headers.set('accept', 'application/json');
-
-  if (config.legacy) {
-    headers.set('authorization', `Bearer ${config.key}`);
-  }
-
-  if (init.body !== undefined && !headers.has('content-type')) {
-    headers.set('content-type', 'application/json');
-  }
-
-  return fetch(`${config.url}/rest/v1/${path}`, { ...init, headers });
+/**
+ * Calls Supabase Auth Admin API from the Worker only.
+ * The secret/service-role key never leaves the server and is never embedded in the admin page.
+ */
+export function supabaseAuthAdminFetch(
+  env: Env,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> | null {
+  const config = adminConfig(env);
+  if (!config) return null;
+  const normalized = path.replace(/^\/+/, '');
+  return fetch(`${config.url}/auth/v1/admin/${normalized}`, { ...init, headers: adminHeaders(config, init) });
 }

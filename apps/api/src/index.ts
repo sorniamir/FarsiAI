@@ -4,6 +4,8 @@ import { attachmentContext, firstImageAttachment, normalizeAttachments } from '.
 import { runChat } from './ai/chat';
 import { runImage } from './ai/image';
 import { handleVoiceSynthesis, handleVoiceTranscription } from './ai/voice';
+import { handleAdminRequest } from './admin';
+import { renderAdminPanel } from './admin-ui';
 import {
   refundDailyQuota,
   refundGuestDailyQuota,
@@ -71,6 +73,14 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
+    }
+
+    if (request.method === 'GET' && (url.pathname === '/admin' || url.pathname === '/admin/')) {
+      return renderAdminPanel(env);
+    }
+
+    if (url.pathname.startsWith('/v1/admin/')) {
+      return handleAdminRequest(request, env);
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
@@ -149,6 +159,9 @@ export default {
       if (auth.kind === 'unconfigured') {
         return json(env, { ok: false, error: 'اتصال حساب کاربری به سرور هنوز کامل نشده است.' }, 503);
       }
+      if (auth.kind === 'user' && auth.user.banned) {
+        return json(env, { ok: false, error: 'این حساب توسط مدیریت FarsiAI مسدود شده است.' }, 403);
+      }
 
       const guestKey = auth.kind === 'guest' ? await guestActorKey(request) : undefined;
       const actorKey = auth.kind === 'user' ? `user:${auth.user.id}` : guestKey!;
@@ -160,7 +173,7 @@ export default {
         return json(env, { ok: false, error: 'تعداد درخواست‌ها زیاد شده. کمی بعد دوباره تلاش کنید.' }, 429);
       }
 
-      let quota: { chatRemaining: number; imageRemaining: number; resetsAt?: string } | undefined;
+      let quota: { chatRemaining: number; imageRemaining: number; resetsAt?: string; unlimited?: boolean } | undefined;
       let conversationId: string | undefined;
 
       if (auth.kind === 'user') {
