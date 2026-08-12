@@ -296,8 +296,10 @@ export async function handleVoiceSynthesis(request: Request, env: Env): Promise<
       return json(env, { ok: false, error: 'Ø³Ø§Ø®Øª Ù¾Ø§Ø³Ø® ØµÙˆØªÛŒ Ù…ÙˆÙ‚ØªØ§Ù‹ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯Ø› Ø¯ÙˆØ¨Ø§Ø±Ù‡ ØªÙ„Ø§Ø´ Ú©Ù†ÛŒØ¯.', code: 'VOICE_TTS_FAILED', requestId }, 502);
     }
     const wav = audioAsWav(audio);
+    const body = new Uint8Array(wav.byteLength);
+    body.set(wav);
     console.log(JSON.stringify({ event: 'voice_synthesis_success', requestId, model: audio.model, bytes: wav.length }));
-    return new Response(wav, {
+    return new Response(body.buffer, {
       status: 200,
       headers: {
         ...corsHeaders(env),
