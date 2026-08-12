@@ -1,0 +1,38 @@
+name: Codex AI Live Probe
+
+on:
+  push:
+    branches: ["agent/codex-ai-probe"]
+  workflow_dispatch:
+
+jobs:
+  live-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe real Workers AI tool calling
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://agent-codex-ai-probe-farsiai-api.sorniamir2005.workers.dev/codex-ai-probe"
+          echo "Waiting for Cloudflare preview..."
+          for i in $(seq 1 20); do
+            set +e
+            BODY=$(curl --silent --show-error --fail --max-time 90 "$URL")
+            CODE=$?
+            set -e
+            if [ "$CODE" -eq 0 ]; then
+              echo "$BODY" | node -e '
+                let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+                  const x=JSON.parse(s);
+                  if(x.ok!==true) throw new Error(`AI probe failed: ${s}`);
+                  if(x.toolName!=="read_file") throw new Error(`Unexpected tool: ${x.toolName}`);
+                  if(typeof x.model!=="string" || !x.model) throw new Error("No model reported");
+                  console.log(`[codex-live-probe] PASS model=${x.model} tool=${x.toolName}`);
+                });
+              '
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "Cloudflare preview probe never became healthy." >&2
+          exit 1
