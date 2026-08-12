@@ -27,6 +27,28 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Repair one-shot patcher
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/scripts/apply_codex_approval_hotfix.py')
+          lines = p.read_text(encoding='utf-8').splitlines()
+          marker = next((i for i, line in enumerate(lines) if 'Never claim a change, command, test, launch or completion' in line), None)
+          if marker is None:
+              raise SystemExit('planner prompt replacement block marker not found')
+          start = marker
+          while start >= 0 and lines[start].strip() != 'replace_once(':
+              start -= 1
+          end = marker
+          while end < len(lines) and lines[end].strip() != ')':
+              end += 1
+          if start < 0 or end >= len(lines):
+              raise SystemExit('could not isolate optional planner prompt replacement')
+          del lines[start:end + 1]
+          p.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
       - name: Apply Codex approval patch
         run: python .github/scripts/apply_codex_approval_hotfix.py
 
