@@ -1,4 +1,5 @@
 name: Desktop Windows
+# v0.5.2 final approval/SHA regression verification
 
 on:
   push:
