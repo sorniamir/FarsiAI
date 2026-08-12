@@ -7,11 +7,13 @@ const MODELS = [
   '@cf/zai-org/glm-4.7-flash',
 ] as const;
 
-function toolCallCandidate(result: any): any {
+function toolCallCandidate(result: any): { call: any; shape: string } | null {
   const candidates = [result, result?.result, result?.data, result?.result?.result].filter(Boolean);
   for (const item of candidates) {
-    const call = item?.tool_calls?.[0] ?? item?.choices?.[0]?.message?.tool_calls?.[0] ?? item?.output?.find?.((entry: any) => entry?.type === 'function_call');
-    if (call) return call;
+    if (item?.tool_calls?.[0]) return { call: item.tool_calls[0], shape: 'tool_calls' };
+    if (item?.choices?.[0]?.message?.tool_calls?.[0]) return { call: item.choices[0].message.tool_calls[0], shape: 'choices.message.tool_calls' };
+    const responseCall = item?.output?.find?.((entry: any) => entry?.type === 'function_call');
+    if (responseCall) return { call: responseCall, shape: 'responses.output.function_call' };
   }
   return null;
 }
@@ -66,23 +68,22 @@ export default {
       max_completion_tokens: 600,
     };
 
-    const successes: Array<{ model: string; mode: string; toolName: string; arguments: unknown }> = [];
+    const successes: Array<{ model: string; mode: string; shape: string; toolName: string; arguments: unknown }> = [];
     const failures: Array<{ model: string; mode: string; error: string }> = [];
 
     for (const model of MODELS) {
-      let succeeded = false;
       for (const [mode, modelInput] of [
         ['standard', input],
         ['compatible', compatibleInput(input)],
       ] as const) {
         try {
           const result = await env.AI.run(model, modelInput);
-          const call = toolCallCandidate(result);
-          if (call) {
+          const candidate = toolCallCandidate(result);
+          if (candidate) {
+            const call = candidate.call;
             const name = call?.function?.name ?? call?.name;
             const args = call?.function?.arguments ?? call?.arguments;
-            successes.push({ model, mode, toolName: String(name ?? ''), arguments: args });
-            succeeded = true;
+            successes.push({ model, mode, shape: candidate.shape, toolName: String(name ?? ''), arguments: args });
             break;
           }
           failures.push({ model, mode, error: `no tool call; text=${responseText(result).slice(0, 160)}` });
@@ -90,14 +91,8 @@ export default {
           failures.push({ model, mode, error: error instanceof Error ? error.message : String(error) });
         }
       }
-      if (!succeeded) continue;
     }
 
-    return Response.json({
-      ok: successes.length > 0,
-      successes,
-      failures,
-      preview: true,
-    }, { status: successes.length > 0 ? 200 : 503 });
+    return Response.json({ ok: successes.length > 0, successes, failures, preview: true }, { status: successes.length > 0 ? 200 : 503 });
   },
 };
