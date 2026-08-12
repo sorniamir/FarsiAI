@@ -14,8 +14,7 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://agent-codex-ai-probe-farsiai-api.sorniamir2005.workers.dev/codex-ai-probe"
-          echo "Probing deployed live Workers AI preview..."
-          STATUS=$(curl --silent --show-error --max-time 95 --output /tmp/codex-probe.json --write-out "%{http_code}" "$URL")
+          STATUS=$(curl --silent --show-error --max-time 120 --output /tmp/codex-probe.json --write-out "%{http_code}" "$URL")
           echo "HTTP $STATUS"
           cat /tmp/codex-probe.json
           echo
@@ -23,14 +22,14 @@ jobs:
           const fs = require('fs');
           const body = fs.readFileSync('/tmp/codex-probe.json', 'utf8');
           const data = JSON.parse(body);
-          if (data.ok !== true) {
+          if (data.ok !== true || !Array.isArray(data.successes) || data.successes.length === 0) {
             throw new Error(`Workers AI live probe failed: ${body}`);
           }
-          if (data.toolName !== 'read_file') {
-            throw new Error(`Unexpected tool: ${data.toolName}`);
+          const primary = data.successes.find((x) => x.model === '@cf/openai/gpt-oss-120b');
+          if (!primary || primary.toolName !== 'read_file') {
+            throw new Error(`GPT-OSS 120B did not return the required tool call: ${body}`);
           }
-          if (typeof data.model !== 'string' || !data.model) {
-            throw new Error('No model reported');
+          for (const item of data.successes) {
+            console.log(`[codex-live-probe] PASS model=${item.model} mode=${item.mode} shape=${item.shape} tool=${item.toolName}`);
           }
-          console.log(`[codex-live-probe] PASS model=${data.model} mode=${data.mode} tool=${data.toolName}`);
           NODE
