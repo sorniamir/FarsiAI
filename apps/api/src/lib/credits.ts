@@ -93,12 +93,13 @@ function parseQuota(payload: unknown): DailyQuota | null {
   const chatRemaining = Number(value.chatRemaining);
   const imageRemaining = Number(value.imageRemaining);
   if (!Number.isFinite(chatRemaining) || !Number.isFinite(imageRemaining)) return null;
-  return {
+  const quota: DailyQuota = {
     chatRemaining: Math.max(0, chatRemaining),
     imageRemaining: Math.max(0, imageRemaining),
     resetsAt: typeof value.resetsAt === 'string' ? value.resetsAt : undefined,
-    unlimited: value.unlimited === true || undefined,
   };
+  if (value.unlimited === true) quota.unlimited = true;
+  return quota;
 }
 
 function parseSpendPayload(payload: unknown): SpendResult {
