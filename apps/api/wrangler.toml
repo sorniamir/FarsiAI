@@ -1,5 +1,6 @@
+# FarsiAI v0.5.3 Codex preview restored after live E2E verification
 name = "farsiai-api"
-main = "src/codex-v053-e2e-probe.ts"
+main = "src/index.ts"
 compatibility_date = "2026-08-10"
 compatibility_flags = ["nodejs_compat"]
 keep_vars = true
