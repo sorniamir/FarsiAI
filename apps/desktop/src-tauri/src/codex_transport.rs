@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn native_client_header_tracks_the_release_version() {
-        assert_eq!(codex_client_header(), "desktop/0.5.1-codex-studio");
+        assert_eq!(codex_client_header(), "desktop/0.5.2-codex-studio");
     }
 
     #[test]

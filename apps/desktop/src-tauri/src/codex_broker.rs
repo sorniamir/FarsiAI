@@ -521,16 +521,15 @@ fn verify_expected_hash(existing: Option<&[u8]>, expected: Option<&str>) -> Resu
     match existing {
         Some(bytes) => {
             let actual = sha256_bytes(bytes);
-            let supplied = expected
-                .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| "expectedSha256 is required when replacing an existing file.".to_string())?;
-            if supplied.len() != 64 || !supplied.bytes().all(|value| value.is_ascii_hexdigit()) {
-                return Err("expectedSha256 must be a 64-character SHA-256 value.".to_string());
-            }
-            if !actual.eq_ignore_ascii_case(supplied) {
-                return Err(format!(
-                    "File changed since it was read (SHA-256 conflict; current hash is {actual})."
-                ));
+            if let Some(supplied) = expected.filter(|value| !value.trim().is_empty()) {
+                if supplied.len() != 64 || !supplied.bytes().all(|value| value.is_ascii_hexdigit()) {
+                    return Err("expectedSha256 must be a 64-character SHA-256 value.".to_string());
+                }
+                if !actual.eq_ignore_ascii_case(supplied) {
+                    return Err(format!(
+                        "File changed since it was read (SHA-256 conflict; current hash is {actual})."
+                    ));
+                }
             }
             Ok(Some(actual))
         }
@@ -1105,7 +1104,8 @@ pub async fn codex_write_file(
     if existed {
         let current = fs::read(&target)
             .map_err(|error| format!("Cannot re-check target before writing: {error}"))?;
-        verify_expected_hash(Some(&current), expected_sha256.as_deref())?;
+        let recheck_expected = expected_sha256.as_deref().or(before_sha256.as_deref());
+        verify_expected_hash(Some(&current), recheck_expected)?;
     }
 
     let change_id = new_id("change");
@@ -2208,6 +2208,13 @@ pub fn codex_list_audit(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_expected_hash_captures_existing_file_for_safe_recheck() {
+        let bytes = b"existing file";
+        let actual = sha256_bytes(bytes);
+        assert_eq!(verify_expected_hash(Some(bytes), None).unwrap(), Some(actual));
+    }
 
     fn temporary_workspace(label: &str) -> PathBuf {
         let path = env::temp_dir().join(format!("farsiai-codex-broker-{label}-{}", new_id("test")));

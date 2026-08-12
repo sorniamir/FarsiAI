@@ -94,6 +94,8 @@ export function CodexStudio() {
     abortRef.current = controller; runRef.current = runId;
     const observations: CodexObservation[] = [];
     const approved = new Set<CodexToolName>();
+    const completedWrites = new Map<string, { content: string; observation: CodexObservation }>();
+    const completedDirectories = new Map<string, CodexObservation>();
     try {
       for (let step = 1; step <= 16; step += 1) {
         const activityId = id();
@@ -108,6 +110,40 @@ export function CodexStudio() {
         }
         const call = turn.tool;
         setActivity((items) => items.map((item) => item.id === activityId ? { ...item, title: toolLabel(call.name), detail: target(call), state: 'running' } : item));
+        if (call.name === 'write_file') {
+          const completed = completedWrites.get(call.arguments.path);
+          if (completed && completed.content === call.arguments.content) {
+            observations.push({
+              ...completed.observation,
+              callId: call.callId,
+              createdAt: new Date().toISOString(),
+              content: `${completed.observation.content}\nDuplicate write suppressed locally because the exact content is already verified on disk.`,
+            });
+            setActivity((items) => items.map((item) => item.id === activityId ? {
+              ...item,
+              detail: 'این تغییر قبلاً با موفقیت روی دیسک اعمال و تأیید شده بود؛ اجرای تکراری حذف شد.',
+              state: 'success',
+            } : item));
+            continue;
+          }
+        }
+        if (call.name === 'create_directory') {
+          const completed = completedDirectories.get(call.arguments.path);
+          if (completed) {
+            observations.push({
+              ...completed,
+              callId: call.callId,
+              createdAt: new Date().toISOString(),
+              content: `${completed.content}\nDuplicate directory creation suppressed locally because it is already verified.`,
+            });
+            setActivity((items) => items.map((item) => item.id === activityId ? {
+              ...item,
+              detail: 'این پوشه قبلاً ساخته و تأیید شده بود؛ اجرای تکراری حذف شد.',
+              state: 'success',
+            } : item));
+            continue;
+          }
+        }
         if (!await approve(call, approved)) {
           observations.push(deniedObservation(call));
           setActivity((items) => items.map((item) => item.id === activityId ? { ...item, detail: 'توسط کاربر رد شد.', state: 'denied' } : item));
@@ -115,6 +151,13 @@ export function CodexStudio() {
         }
         const evidence = await executeCodexTool({ call, workspace, applications: apps, runId });
         observations.push(evidence.observation);
+        if (evidence.observation.status === 'success') {
+          if (call.name === 'write_file') {
+            completedWrites.set(call.arguments.path, { content: call.arguments.content, observation: evidence.observation });
+          } else if (call.name === 'create_directory') {
+            completedDirectories.set(call.arguments.path, evidence.observation);
+          }
+        }
         setActivity((items) => items.map((item) => item.id === activityId ? { ...item, detail: evidence.summary, state: evidence.observation.status === 'success' ? 'success' : 'error' } : item));
         if (evidence.backupId) setChanges((items) => [{ id: id(), path: 'path' in call.arguments ? call.arguments.path : toolLabel(call.name), detail: evidence.diffSummary || evidence.summary, changeId: evidence.backupId! }, ...items]);
       }

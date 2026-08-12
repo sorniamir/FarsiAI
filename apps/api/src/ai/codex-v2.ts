@@ -185,7 +185,8 @@ function normalizeToolCall(raw: unknown, offered: Set<ToolName>, appIds: Set<str
   let normalized: Record<string, unknown>;
   if (name === 'write_file') {
     if (!path || path === '.' || typeof input.content !== 'string' || !input.content || input.content.length > 5_000_000) return null;
-    normalized = { path, content: input.content, expectedSha256: typeof input.expectedSha256 === 'string' ? input.expectedSha256 : null };
+    normalized = { path, content: input.content };
+    if (typeof input.expectedSha256 === 'string' && input.expectedSha256.trim()) normalized.expectedSha256 = input.expectedSha256;
   } else if (name === 'search_files') {
     const query = sanitizeText(String(input.query ?? ''), 500).trim();
     if (!query) return null;

@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { supabase } from '../lib/supabase';
 
 export const CODEX_PROTOCOL = 'farsiai.codex.desktop.v2' as const;
-export const CODEX_CLIENT_VERSION = '0.5.1-codex-studio';
+export const CODEX_CLIENT_VERSION = '0.5.2-codex-studio';
 
 export type CodexToolName =
   | 'list_directory'
@@ -500,7 +500,7 @@ export async function executeCodexTool(input: {
 
     if (call.name === 'write_file') {
       let expectedSha256 = call.arguments.expectedSha256;
-      if (expectedSha256 === undefined) {
+      if (expectedSha256 === undefined || expectedSha256 === null) {
         try {
           expectedSha256 = (await readWorkspaceFile(workspace, call.arguments.path)).sha256;
         } catch {
@@ -577,7 +577,11 @@ export async function executeCodexTool(input: {
     const content = JSON.stringify({ application: app.label, launched: true, processId });
     return { observation: observation({ call, status: 'success', content, verified: true, started }), summary: `${app.label} با تأیید کاربر باز شد.` };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'اجرای ابزار محلی ناموفق بود.';
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === 'string' && error.trim()
+        ? error
+        : 'اجرای ابزار محلی ناموفق بود.';
     return {
       observation: observation({ call, status: 'error', content: message, verified: false, started, extra: { runId: call.name === 'run_command' ? input.runId : undefined } }),
       summary: message,
