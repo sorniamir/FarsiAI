@@ -2,9 +2,12 @@ import fs from 'node:fs';
 
 function replaceOnce(path, from, to) {
   const source = fs.readFileSync(path, 'utf8');
-  if (!source.includes(from)) throw new Error(`Anchor missing in ${path}: ${from.slice(0, 90)}`);
-  if (source.split(from).length !== 2) throw new Error(`Anchor not unique in ${path}`);
-  fs.writeFileSync(path, source.replace(from, to));
+  const variants = [from, from.replace(/\n/g, '\r\n')];
+  const matched = variants.find((candidate) => source.includes(candidate));
+  if (!matched) throw new Error(`Anchor missing in ${path}: ${from.slice(0, 90)}`);
+  if (source.split(matched).length !== 2) throw new Error(`Anchor not unique in ${path}`);
+  const replacement = matched.includes('\r\n') ? to.replace(/\n/g, '\r\n') : to;
+  fs.writeFileSync(path, source.replace(matched, replacement));
 }
 
 replaceOnce(
