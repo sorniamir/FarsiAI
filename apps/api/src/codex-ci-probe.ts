@@ -4,10 +4,7 @@ const MODELS = [
   '@cf/openai/gpt-oss-120b',
   '@cf/openai/gpt-oss-20b',
   '@cf/google/gemma-4-26b-a4b-it',
-  '@cf/meta/llama-4-scout-17b-16e-instruct',
   '@cf/zai-org/glm-4.7-flash',
-  '@cf/moonshotai/kimi-k2.7-code',
-  '@cf/zai-org/glm-5.2',
 ] as const;
 
 function toolCallCandidate(result: any): any {
@@ -59,14 +56,8 @@ export default {
     }];
     const input: Record<string, unknown> = {
       messages: [
-        {
-          role: 'system',
-          content: 'You are a coding agent connectivity probe. You must call exactly one offered tool and never answer with plain text.',
-        },
-        {
-          role: 'user',
-          content: 'Call read_file for package.json now.',
-        },
+        { role: 'system', content: 'You are a coding agent connectivity probe. You must call exactly one offered tool and never answer with plain text.' },
+        { role: 'user', content: 'Call read_file for package.json now.' },
       ],
       tools,
       tool_choice: 'required',
@@ -75,8 +66,11 @@ export default {
       max_completion_tokens: 600,
     };
 
+    const successes: Array<{ model: string; mode: string; toolName: string; arguments: unknown }> = [];
     const failures: Array<{ model: string; mode: string; error: string }> = [];
+
     for (const model of MODELS) {
+      let succeeded = false;
       for (const [mode, modelInput] of [
         ['standard', input],
         ['compatible', compatibleInput(input)],
@@ -87,22 +81,23 @@ export default {
           if (call) {
             const name = call?.function?.name ?? call?.name;
             const args = call?.function?.arguments ?? call?.arguments;
-            return Response.json({
-              ok: true,
-              model,
-              mode,
-              toolName: name,
-              arguments: args,
-              preview: true,
-            });
+            successes.push({ model, mode, toolName: String(name ?? ''), arguments: args });
+            succeeded = true;
+            break;
           }
           failures.push({ model, mode, error: `no tool call; text=${responseText(result).slice(0, 160)}` });
         } catch (error) {
           failures.push({ model, mode, error: error instanceof Error ? error.message : String(error) });
         }
       }
+      if (!succeeded) continue;
     }
 
-    return Response.json({ ok: false, failures, preview: true }, { status: 503 });
+    return Response.json({
+      ok: successes.length > 0,
+      successes,
+      failures,
+      preview: true,
+    }, { status: successes.length > 0 ? 200 : 503 });
   },
 };
