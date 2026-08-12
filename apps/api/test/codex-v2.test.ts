@@ -29,7 +29,7 @@ function body(observations: unknown[] = []) {
     task: 'فایل package.json را بررسی کن و فقط در صورت نیاز قدم بعدی را پیشنهاد بده.',
     workspace: { boundary: 'approved-workspace', label: 'Codex v2 test workspace' },
     observations,
-    client: { kind: 'desktop', version: '0.5.1', locale: 'fa-IR' },
+    client: { kind: 'desktop', version: '0.5.3', locale: 'fa-IR' },
     capabilities: {
       protocol: 'farsiai.codex.desktop.v2',
       tools: [{ name: 'read_file', permission: 'automatic' }],
