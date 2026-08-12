@@ -1,0 +1,43 @@
+name: Codex v0.5.3 Live E2E Loop
+
+on:
+  push:
+    branches: ["agent/codex-ai-probe"]
+    paths:
+      - ".github/workflows/codex-v053-live-e2e.yml"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify real Workers AI create -> verified observation -> final loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://agent-codex-ai-probe-farsiai-api.sorniamir2005.workers.dev/codex-v053-e2e"
+          STATUS="000"
+          for attempt in $(seq 1 36); do
+            STATUS=$(curl --silent --show-error --max-time 120 --output /tmp/codex-v053-e2e.json --write-out "%{http_code}" "$URL" || true)
+            echo "attempt=$attempt HTTP=$STATUS"
+            if [ "$STATUS" = "200" ]; then break; fi
+            sleep 10
+          done
+          cat /tmp/codex-v053-e2e.json || true
+          echo
+          test "$STATUS" = "200"
+          node - <<'NODE'
+          const fs = require('fs');
+          const body = fs.readFileSync('/tmp/codex-v053-e2e.json', 'utf8');
+          const data = JSON.parse(body);
+          if (data.ok !== true || data.scenario !== 'create-document-then-finalize') {
+            throw new Error(`Live Codex loop failed: ${body}`);
+          }
+          for (const model of ['@cf/openai/gpt-oss-120b', '@cf/google/gemma-4-26b-a4b-it']) {
+            const report = data.reports?.find((item) => item.model === model);
+            if (!report || report.ok !== true || report.finalAfterVerifiedWrite !== true) {
+              throw new Error(`${model} did not finalize safely after verified write: ${body}`);
+            }
+            console.log(`[codex-v053-e2e] PASS model=${model} duplicateSuppressionNeeded=${report.duplicateSuppressionNeeded} final=${JSON.stringify(report.finalText)}`);
+          }
+          NODE
