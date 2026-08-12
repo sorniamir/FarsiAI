@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   codex_hotfix:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('.github/scripts/apply_codex_approval_hotfix.py') != ''
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -52,10 +52,11 @@ jobs:
       - name: Apply Codex approval patch
         run: python .github/scripts/apply_codex_approval_hotfix.py
 
-      - name: Refresh lockfiles
-        run: |
-          npm install --package-lock-only --ignore-scripts
-          cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Keep workflow changes out of bot commit
+        run: git checkout HEAD -- .github/workflows
+
+      - name: Refresh npm lockfile
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Commit and push final hotfix
         run: |
