@@ -1,4 +1,4 @@
-# FarsiAI v0.5.1 Codex production deploy marker
+# FarsiAI v0.5.1 Codex recovery backend
 name = "farsiai-api"
 main = "src/index.ts"
 compatibility_date = "2026-08-10"
