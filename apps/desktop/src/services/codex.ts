@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { supabase } from '../lib/supabase';
 
 export const CODEX_PROTOCOL = 'farsiai.codex.desktop.v2' as const;
-export const CODEX_CLIENT_VERSION = '0.5.0-codex-studio';
+export const CODEX_CLIENT_VERSION = '0.5.1-codex-studio';
 
 export type CodexToolName =
   | 'list_directory'

@@ -4,7 +4,7 @@ import { resolveAuth } from '../lib/supabase-auth';
 import type { Env } from '../types';
 
 const PROTOCOL = 'farsiai.codex.desktop.v2';
-const MODELS = ['@cf/openai/gpt-oss-120b', '@cf/openai/gpt-oss-20b', '@cf/google/gemma-4-26b-a4b-it', '@cf/zai-org/glm-4.7-flash'] as const;
+const MODELS = ['@cf/openai/gpt-oss-120b', '@cf/google/gemma-4-26b-a4b-it'] as const;
 const TOOL_NAMES = ['list_directory', 'read_file', 'search_files', 'write_file', 'create_directory', 'run_command', 'launch_app'] as const;
 const SIDE_EFFECTS = new Set(['write_file', 'create_directory', 'run_command', 'launch_app']);
 const SAFE_COMMANDS = new Set([
