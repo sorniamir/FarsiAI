@@ -397,489 +397,9 @@ export default function AppFinal() {
 
   async function runManualCommand() {
     if (!workspaceGranted) {
-      setAgentTimeline((current) => ['Ø§Ø¨ØªØ¯Ø§ Workspace Ø±Ø§ approve Ú©Ù†.', ...current]);
-      return;
-    }
-    const args = commandArgs.trim().split(/\s+/).filter(Boolean);
-    const approved = await requestApproval({
-      title: 'Ø§Ø¬Ø§Ø²Ù‡ Ø§Ø¬Ø±Ø§ÛŒ Terminal',
-      detail: `${command} ${args.join(' ')}\n\nWorking directory:\n${workspace}`,
-      confirmLabel: 'Ø§Ø¬Ø±Ø§',
-    });
-    if (!approved) return;
-
-    try {
-      await agent.runCommand(command.trim(), args, workspace);
-    } catch (error) {
-      setAgentTimeline((current) => [`âœ• ${String(error)}`, ...current]);
-    }
-  }
-
-  async function executeAgentTool(tool: AgentToolCall): Promise<string> {
-    if (tool.name === 'list_directory') {
-      const path = toolPath(workspace, tool.arguments.path);
-      const entries = await agent.listDirectory(path);
-      return truncate(JSON.stringify(entries.map((entry) => ({ name: entry.name, is_dir: entry.is_dir }))));
-    }
-
-    if (tool.name === 'read_file') {
-      const path = toolPath(workspace, tool.arguments.path);
-      const content = await agent.readFile(path);
-      setSelectedFile(path);
-      setEditorValue(content);
-      return truncate(content);
-    }
-
-    if (tool.name === 'write_file') {
-      const path = toolPath(workspace, tool.arguments.path);
-      const approved = await requestApproval({
-        title: 'Codex Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ ÙØ§ÛŒÙ„ Ø±Ø§ ØªØºÛŒÛŒØ± Ø¯Ù‡Ø¯',
-        detail: `${tool.arguments.path}\n\nÙ‚Ø¨Ù„ Ø§Ø² Write Ø§Ø² Ù†Ø³Ø®Ù‡ ÙØ¹Ù„ÛŒ Backup Ú¯Ø±ÙØªÙ‡ Ù…ÛŒâ€ŒØ´ÙˆØ¯. ØªØºÛŒÛŒØ± ÙÙ‚Ø· Ø¯Ø§Ø®Ù„ Workspace ØªØ£ÛŒÛŒØ¯Ø´Ø¯Ù‡ Ø§Ù†Ø¬Ø§Ù… Ù…ÛŒâ€ŒØ´ÙˆØ¯.`,
-        confirmLabel: 'Ø§Ø¹Ù…Ø§Ù„ ØªØºÛŒÛŒØ±',
-      });
-      if (!approved) return 'USER_DENIED_WRITE';
-
-      const backup = await agent.writeFile(path, tool.arguments.content);
-      setSelectedFile(path);
-      setEditorValue(tool.arguments.content);
-      return backup ? 'WRITE_OK_BACKUP_CREATED' : 'WRITE_OK_NEW_FILE';
-    }
-
-    if (tool.name !== 'run_command') {
-      throw new Error(`Ø§Ø¨Ø²Ø§Ø± Ù†Ø§Ø´Ù†Ø§Ø®ØªÙ‡ Â«${String((tool as { name?: unknown }).name)}Â» Ø§Ø¬Ø§Ø²Ù‡ Ø§Ø¬Ø±Ø§ Ù†Ø¯Ø§Ø±Ø¯.`);
-    }
-    const args = Array.isArray(tool.arguments.args) ? tool.arguments.args.map(String).slice(0, 64) : [];
-    if (!tool.arguments.command.trim()) throw new Error('Ø¯Ø³ØªÙˆØ± Terminal Ø®Ø§Ù„ÛŒ ÛŒØ§ Ù†Ø§Ù…Ø¹ØªØ¨Ø± Ø§Ø³Øª.');
-    const approved = await requestApproval({
-      title: 'Codex Ù…ÛŒâ€ŒØ®ÙˆØ§Ù‡Ø¯ Terminal Ø§Ø¬Ø±Ø§ Ú©Ù†Ø¯',
-      detail: `${tool.arguments.command} ${args.join(' ')}\n\nWorkspace:\n${workspace}`,
-      confirmLabel: 'Ø§Ø¬Ø±Ø§',
-    });
-    if (!approved) return 'USER_DENIED_COMMAND';
-
-    const result = await agent.runCommand(tool.arguments.command, args, workspace);
-    return truncate(`exit=${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
-  }
-
-  function stopAgent() {
-    if (!agentRunning) return;
-    agentAbortRef.current?.abort();
-    setAgentTimeline((current) => [...current, 'â–  ØªÙˆÙ‚Ù ØªÙˆØ³Ø· Ú©Ø§Ø±Ø¨Ø± Ø¯Ø±Ø®ÙˆØ§Ø³Øª Ø´Ø¯.']);
-    if (approval) resolveApproval(false);
-  }
-
-  async function runAgent() {
-    const task = agentTask.trim();
-    if (!task || agentRunning) return;
-    if (!user) {
-      setAgentTimeline(['âœ• Ø¨Ø±Ø§ÛŒ Ø§Ø³ØªÙØ§Ø¯Ù‡ Ø§Ø² Codex Ø¨Ø§ÛŒØ¯ ÙˆØ§Ø±Ø¯ Ø­Ø³Ø§Ø¨ Ø´ÙˆÛŒ.']);
-      return;
-    }
-    if (!workspaceGranted) {
-      setAgentTimeline((current) => ['Ø§Ø¨ØªØ¯Ø§ Workspace Ø±Ø§ approve Ú©Ù†.', ...current]);
-      return;
-    }
-
-    const controller = new AbortController();
-    agentAbortRef.current = controller;
-    setAgentRunning(true);
-    setAgentTimeline([`â— Task: ${task}`, 'âœ“ Permission boundary active', 'â—‹ Ø¯Ø± Ø­Ø§Ù„ Ø¨Ø±Ù‚Ø±Ø§Ø±ÛŒ Ø§ØªØµØ§Ù„ Ø§Ù…Ù† Ø¨Ø§ Codex Proâ€¦']);
-    let observations: AgentObservation[] = [];
-    let plannerConnected = false;
-    let finished = false;
-
-    try {
-      for (let step = 1; step <= 24; step += 1) {
-        if (controller.signal.aborted) break;
-        setAgentTimeline((current) => [...current, `â—‹ Planning step ${step}â€¦`]);
-
-        const plan = await planAgentStep({ task, workspace, observations, signal: controller.signal });
-        if (controller.signal.aborted) break;
-        if (!plan.ok) {
-          const diagnostic = [plan.code, plan.requestId ? `request: ${plan.requestId}` : ''].filter(Boolean).join(' Â· ');
-          setAgentTimeline((current) => [...current, `âœ• ${plan.error}${diagnostic ? ` (${diagnostic})` : ''}`]);
-          break;
-        }
-        if (!plannerConnected) {
-          plannerConnected = true;
-          setAgentTimeline((current) => [...current, 'âœ“ Codex Pro connected']);
-        }
-        if (plan.type === 'final') {
-          finished = true;
-          setAgentTimeline((current) => [...current, `âœ“ ${plan.message}${plan.model ? ` Â· ${plan.model.replace('@cf/', '')}` : ''}`]);
-          break;
-        }
-
-        const tool = plan.tool;
-        setAgentTimeline((current) => [...current, `â†’ ${tool.name}${plan.model ? ` Â· ${plan.model.replace('@cf/', '')}` : ''}`]);
-        try {
-          const result = await executeAgentTool(tool);
-          observations = [...observations, { role: 'tool', name: tool.name, content: result }].slice(-18);
-          const commandExit = tool.name === 'run_command' ? result.match(/(?:^|\n)exit=(-?\d+)/i) : null;
-          const exitCode = commandExit ? Number(commandExit[1]) : 0;
-          const failed = tool.name === 'run_command' && exitCode !== 0;
-          setAgentTimeline((current) => [
-            ...current,
-            failed
-              ? `âš  ${tool.name} failed Â· exit ${exitCode} Â· Codex will diagnose`
-              : result.includes('BACKUP')
-                ? `âœ“ ${tool.name} completed Â· backup protected`
-                : `âœ“ ${tool.name} completed`,
-          ]);
-          if (result.startsWith('USER_DENIED_')) {
-            observations = [...observations, { role: 'note', content: 'The user denied the requested side effect. Choose a safer alternative or stop.' }].slice(-18);
-          }
-        } catch (error) {
-          const message = String(error);
-          observations = [...observations, { role: 'tool', name: tool.name, content: `ERROR: ${message}` }].slice(-18);
-          setAgentTimeline((current) => [...current, `âœ• ${message}`]);
-        }
-      }
-      if (!controller.signal.aborted && plannerConnected && !finished) {
-        setAgentTimeline((current) => [...current, 'â–  Ø³Ù‚Ù Û²Û´ Ù…Ø±Ø­Ù„Ù‡ Ø±Ø³ÛŒØ¯Ø› Task Ø±Ø§ Ú©ÙˆÚ†Ú©â€ŒØªØ± Ùˆ Ø¯Ù‚ÛŒÙ‚â€ŒØªØ± Ø¨Ù†ÙˆÛŒØ³ÛŒØ¯.']);
-      }
-    } catch (error) {
-      if (controller.signal.aborted || isAbortError(error)) {
-        setAgentTimeline((current) => [...current, 'â–  Agent Ù…ØªÙˆÙ‚Ù Ø´Ø¯.']);
-      } else {
-        setAgentTimeline((current) => [...current, `âœ• ${String(error)}`]);
-      }
-    } finally {
-      if (controller.signal.aborted) setAgentTimeline((current) => [...current, 'â–  Agent stopped']);
-      if (agentAbortRef.current === controller) agentAbortRef.current = null;
-      setAgentRunning(false);
-      await refreshCloudState();
-    }
-  }
-
-  if (!authReady) {
-    return <div className="center-screen"><div className="loader-orb" /><div>Ø¯Ø± Ø­Ø§Ù„ Ø¢Ù…Ø§Ø¯Ù‡â€ŒØ³Ø§Ø²ÛŒ FarsiAIâ€¦</div></div>;
-  }
-
-  if (!user && !guestMode) {
-    return <AuthScreen onAuthenticated={() => getCurrentUser().then(setUser)} onGuest={enterGuest} />;
-  }
-
-  const isGuest = guestMode && !user;
-  const fullQuota = isGuest ? GUEST_FULL_QUOTA : USER_FULL_QUOTA;
-  const shownQuota = quota ?? fullQuota;
-  const canSend = !sending && (input.trim().length > 0 || (mode === 'chat' && attachments.length > 0));
-  const imageIsEditing = mode === 'image' && (Boolean(replyTarget?.image) || attachments.some((item) => item.mimeType.startsWith('image/')));
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar glass">
-        <div className="brand-row">
-          <img className="app-icon" src="/app-icon.png" alt="FarsiAI" />
-          <div><strong>FarsiAI</strong><span>Desktop Intelligence</span></div>
-        </div>
-
-        <button className="new-chat" onClick={newConversation}>ï¼‹ Ú¯ÙØªÚ¯ÙˆÛŒ Ø¬Ø¯ÛŒØ¯</button>
-        <nav className="nav-stack">
-          <NavButton active={tab === 'chat'} label="Chat" caption="Ú¯ÙØªÚ¯ÙˆØŒ ÙØ§ÛŒÙ„ Ùˆ ØªØµÙˆÛŒØ±" onClick={() => setTab('chat')} />
-          <NavButton active={tab === 'voice'} label="Voice Chat" caption="Ú¯ÙØªâ€ŒÙˆÚ¯ÙˆÛŒ Ø²Ù†Ø¯Ù‡ ÙØ§Ø±Ø³ÛŒ" onClick={() => setTab('voice')} />
-          <NavButton active={tab === 'codex'} label="Codex" caption={isGuest ? 'Ù†ÛŒØ§Ø²Ù…Ù†Ø¯ ÙˆØ±ÙˆØ¯' : 'Agent ÙˆØ§Ù‚Ø¹ÛŒ PC'} onClick={() => setTab('codex')} />
-        </nav>
-
-        <div className="history-head"><span>{isGuest ? 'Ø­Ø§Ù„Øª Ù…Ù‡Ù…Ø§Ù†' : 'ØªØ§Ø±ÛŒØ®Ú†Ù‡ Ù…Ø´ØªØ±Ú©'}</span><span>{isGuest ? 'Local' : conversations.length}</span></div>
-        <div className="history-list">
-          {!isGuest && conversations.map((item) => (
-            <button key={item.id} className={item.id === conversationId ? 'history-item active' : 'history-item'} onClick={() => openConversation(item)}>
-              <span className="history-title">{item.title}</span>
-              <span className="history-meta">{formatDate(item.updatedAt)} Â· {item.mode}</span>
-            </button>
-          ))}
-          {isGuest ? <div className="empty-mini">Ú¯ÙØªÚ¯ÙˆÙ‡Ø§ÛŒ Ù…Ù‡Ù…Ø§Ù† Ø¯Ø± Cloud Ø°Ø®ÛŒØ±Ù‡ Ù†Ù…ÛŒâ€ŒØ´ÙˆÙ†Ø¯.</div> : null}
-          {!isGuest && conversations.length === 0 ? <div className="empty-mini">Ù‡Ù†ÙˆØ² Ú¯ÙØªÚ¯ÙˆÛŒÛŒ Ø°Ø®ÛŒØ±Ù‡ Ù†Ø´Ø¯Ù‡.</div> : null}
-        </div>
-
-        <div className="profile-card">
-          <div>
-            <strong>{isGuest ? 'Guest' : account.displayName || account.email || 'FarsiAI User'}</strong>
-            <span>{isGuest ? 'GUEST' : account.plan.toUpperCase()} Â· Chat {shownQuota.chatRemaining} Â· Image {shownQuota.imageRemaining}</span>
-          </div>
-          <button className="icon-button" onClick={leaveSession}>â†ª</button>
-        </div>
-      </aside>
-
-      <main className="main-area">
-        <header className="topbar glass">
-          <div>
-            <strong>{tab === 'chat' ? 'Chat' : tab === 'voice' ? 'Voice Chat Live' : 'Codex Studio'}</strong>
-            <span>{tab === 'chat' ? (isGuest ? 'Guest session Â· Ø¨Ø¯ÙˆÙ† Ø°Ø®ÛŒØ±Ù‡ Cloud' : 'Ù‡Ù…Ø§Ù† Ø§Ú©Ø§Ù†Øª Ùˆ ØªØ§Ø±ÛŒØ®Ú†Ù‡ Ø±ÙˆÛŒ Ù…ÙˆØ¨Ø§ÛŒÙ„ Ùˆ Ø¯Ø³Ú©ØªØ§Ù¾') : tab === 'voice' ? 'Ù…ÛŒÚ©Ø±ÙˆÙÙ† ÙÙ‚Ø· Ø¨Ø§ Ù„Ù…Ø³ Ú©Ø§Ø±Ø¨Ø± ÙØ¹Ø§Ù„ Ù…ÛŒâ€ŒØ´ÙˆØ¯' : 'Local tools Ø¨Ø§ Permission-first security'}</span>
-          </div>
-          <div className="top-actions">
-            <span className="quota-pill">Chat {shownQuota.chatRemaining}/{fullQuota.chatRemaining} Â· Image {shownQuota.imageRemaining}/{fullQuota.imageRemaining}</span>
-            {agentRunning ? <span className="quota-pill">Agent working</span> : null}
-            <span className="status-pill"><i /> Online</span>
-          </div>
-        </header>
-
-        {tab === 'chat' ? (
-          <section className="chat-layout">
-            <div className="chat-stage glass">
-              <div className="mode-row">
-                <div className="segmented">
-                  <button className={mode === 'chat' ? 'active' : ''} onClick={() => setChatMode('chat')}>Chat</button>
-                  <button className={mode === 'image' ? 'active' : ''} onClick={() => setChatMode('image')}>Image</button>
-                </div>
-                <span>{mode === 'image' ? (imageIsEditing ? 'ÙˆÛŒØ±Ø§ÛŒØ´ ÙÙ‚Ø· ØªØµÙˆÛŒØ± Ø§Ù†ØªØ®Ø§Ø¨â€ŒØ´Ø¯Ù‡' : 'Ù‡Ø± Ø¯Ø±Ø®ÙˆØ§Ø³ØªØŒ ØªØµÙˆÛŒØ± Ø¬Ø¯ÛŒØ¯') : (isGuest ? 'Guest quota enforced by server' : 'Cloud-synced conversation')}</span>
-              </div>
-
-              <div className="messages">
-                {messages.length === 0 ? (
-                  <div className="welcome">
-                    <img src="/app-icon.png" alt="FarsiAI" />
-                    <h1>{mode === 'chat' ? 'Ú†Ø·ÙˆØ± Ù…ÛŒâ€ŒØªÙˆÙ†Ù… Ú©Ù…Ú©Øª Ú©Ù†Ù…ØŸ' : 'Ú†Ù‡ ØªØµÙˆÛŒØ±ÛŒ Ø¨Ø³Ø§Ø²ÛŒÙ…ØŸ'}</h1>
-                    <p>{isGuest ? 'Ø­Ø§Ù„Øª Ù…Ù‡Ù…Ø§Ù†: Ûµ Ù¾ÛŒØ§Ù… Ùˆ Û² ØªØµÙˆÛŒØ± Ø¯Ø± Ø±ÙˆØ².' : 'Ù¾Ù„Ù† Free: Û±Û° Ù¾ÛŒØ§Ù… Ùˆ Û´ ØªØµÙˆÛŒØ± Ø¯Ø± Ø±ÙˆØ²ØŒ Ø¨Ø§ Ø¯Ø§Ø¯Ù‡ Ù…Ø´ØªØ±Ú© Ù…ÙˆØ¨Ø§ÛŒÙ„ Ùˆ Ø¯Ø³Ú©ØªØ§Ù¾.'}</p>
-                    <div className="starter-grid">{STARTERS.map((starter) => <button key={starter} onClick={() => submitChat(starter)}>{starter}</button>)}</div>
-                  </div>
-                ) : messages.map((message) => (
-                  <article key={message.id} className={`message ${message.role}`}>
-                    <div className="message-label">{message.role === 'user' ? 'You' : 'FarsiAI'}</div>
-                    {message.attachments?.length ? (
-                      <div className="message-attachments">
-                        {message.attachments.map((attachment) => (
-                          <div className="message-attachment" key={attachment.id}>
-                            {attachment.previewUrl ? <img src={attachment.previewUrl} alt="attachment" /> : <span className="file-badge">FILE</span>}
-                            <div><strong>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {message.text ? <div className="message-text">{message.text}</div> : null}
-                    {message.image ? <img className="generated-image" src={message.image} alt="AI generated" /> : null}
-                    {message.role === 'assistant' && message.image ? (
-                      <div className="image-message-actions"><button className="secondary image-reply-button" onClick={() => replyToImage(message)}>â†© ÙˆÛŒØ±Ø§ÛŒØ´ Ù‡Ù…ÛŒÙ† ØªØµÙˆÛŒØ±</button></div>
-                    ) : null}
-                  </article>
-                ))}
-                {sending ? <div className="thinking"><i /><span>{mode === 'image' ? 'Ø¯Ø± Ø­Ø§Ù„ Ù¾Ø±Ø¯Ø§Ø²Ø´ ØªØµÙˆÛŒØ±â€¦' : 'Ø¯Ø± Ø­Ø§Ù„ ÙÚ©Ø± Ú©Ø±Ø¯Ù†â€¦'}</span></div> : null}
-              </div>
-
-              <div className="composer composer-v046">
-                <input
-                  ref={attachmentInputRef}
-                  className="hidden-file-input"
-                  type="file"
-                  accept={ATTACH_ACCEPT}
-                  multiple
-                  onChange={(event) => void handleAttachmentFiles(event.target.files)}
-                />
-
-                {replyTarget?.image ? (
-                  <div className="reply-preview">
-                    <img src={replyTarget.image} alt="reply target" />
-                    <div><strong>ÙˆÛŒØ±Ø§ÛŒØ´ Ù‡Ù…ÛŒÙ† ØªØµÙˆÛŒØ±</strong><span>Ø¯Ø±Ø®ÙˆØ§Ø³Øª Ø¨Ø¹Ø¯ÛŒ ÙÙ‚Ø· Ø±ÙˆÛŒ Ø§ÛŒÙ† ØªØµÙˆÛŒØ± Ø§Ø¹Ù…Ø§Ù„ Ù…ÛŒâ€ŒØ´ÙˆØ¯.</span></div>
-                    <button className="icon-button" onClick={() => setReplyTarget(null)}>Ã—</button>
-                  </div>
-                ) : null}
-
-                {attachments.length ? (
-                  <div className="attachment-preview-list">
-                    {attachments.map((attachment) => (
-                      <div className="attachment-preview" key={attachment.id}>
-                        {attachment.previewUrl ? <img src={attachment.previewUrl} alt="attachment preview" /> : <span className="file-badge">FILE</span>}
-                        <div><strong title={attachment.name}>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></div>
-                        <button className="attachment-remove" onClick={() => removeAttachment(attachment.id)}>Ã—</button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {composerError ? <div className="composer-error">{composerError}</div> : null}
-                <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode === 'image' ? 'ØªØµÙˆÛŒØ± Ù…ÙˆØ±Ø¯Ù†Ø¸Ø±Øª Ø±Ø§ ØªÙˆØµÛŒÙ Ú©Ù†â€¦' : 'Ù¾ÛŒØ§Ù… Ø¨Ù†ÙˆÛŒØ³ ÛŒØ§ ÙØ§ÛŒÙ„ Ø§Ø¶Ø§ÙÙ‡ Ú©Ù†â€¦'} />
-                <div className="composer-footer">
-                  <div className="composer-tools">
-                    <button className="composer-tool" disabled={sending} onClick={() => attachmentInputRef.current?.click()}><b>ï¼‹</b><span>Ø§Ø¨Ø²Ø§Ø±Ù‡Ø§</span></button>
-                    <button className={mode === 'image' ? 'composer-tool selected' : 'composer-tool'} disabled={sending} onClick={() => setChatMode('image')}><b>â–§</b><span>ØªØµÙˆÛŒØ±</span></button>
-                    <button className="composer-tool" disabled={sending} onClick={() => setTab('voice')}><b>â—‰</b><span>ØµÙˆØªÛŒ</span></button>
-                    <span className="composer-model"><i /> FarsiAI Pro</span>
-                  </div>
-                  <button className="primary" disabled={!canSend} onClick={() => submitChat()}>{sending ? 'â€¦' : 'Ø§Ø±Ø³Ø§Ù„ â†‘'}</button>
-                </div>
-                <div className="composer-policy">ÙˆÛŒØ±Ø§ÛŒØ´ ØªØµÙˆÛŒØ± ÙÙ‚Ø· Ø¨Ø§ Â«ÙˆÛŒØ±Ø§ÛŒØ´ Ù‡Ù…ÛŒÙ† ØªØµÙˆÛŒØ±Â» ÛŒØ§ Ø¶Ù…ÛŒÙ…Ù‡â€ŒÚ©Ø±Ø¯Ù† ØªØµÙˆÛŒØ± ÙØ¹Ø§Ù„ Ù…ÛŒâ€ŒØ´ÙˆØ¯Ø› ØªØµØ§ÙˆÛŒØ± Ù‚Ø¨Ù„ÛŒ Ø®ÙˆØ¯Ú©Ø§Ø± Ø§Ø³ØªÙØ§Ø¯Ù‡ Ù†Ù…ÛŒâ€ŒØ´ÙˆÙ†Ø¯.</div>
-              </div>
-            </div>
-
-            <aside className="inspector glass">
-              <h3>{isGuest ? 'Guest session' : 'Account sync'}</h3>
-              <Info label="Plan" value={isGuest ? 'guest' : account.plan} />
-              <Info label="Chat Ø¨Ø§Ù‚ÛŒâ€ŒÙ…Ø§Ù†Ø¯Ù‡" value={`${shownQuota.chatRemaining} Ø§Ø² ${fullQuota.chatRemaining}`} />
-              <Info label="Image Ø¨Ø§Ù‚ÛŒâ€ŒÙ…Ø§Ù†Ø¯Ù‡" value={`${shownQuota.imageRemaining} Ø§Ø² ${fullQuota.imageRemaining}`} />
-              {!isGuest ? <Info label="Email" value={account.email || 'â€”'} /> : null}
-              <div className="divider" />
-              <h3>{isGuest ? 'Privacy' : 'Shared data'}</h3>
-              <p>{isGuest ? 'Ø­Ø§Ù„Øª Ù…Ù‡Ù…Ø§Ù† Ø¨Ù‡ ØªØ§Ø±ÛŒØ®Ú†Ù‡ Ø­Ø³Ø§Ø¨ Ø¯Ø³ØªØ±Ø³ÛŒ Ù†Ø¯Ø§Ø±Ø¯ Ùˆ ConversationÙ‡Ø§ Ø¯Ø± Ø­Ø³Ø§Ø¨ Ø°Ø®ÛŒØ±Ù‡ Ù†Ù…ÛŒâ€ŒØ´ÙˆÙ†Ø¯.' : 'ConversationÙ‡Ø§ Ùˆ Ø³Ù‡Ù…ÛŒÙ‡ Ø§Ø² Ù‡Ù…Ø§Ù† Supabase Ù…ÙˆØ¨Ø§ÛŒÙ„ Ø®ÙˆØ§Ù†Ø¯Ù‡ Ù…ÛŒâ€ŒØ´ÙˆÙ†Ø¯Ø› Desktop Ø¯ÛŒØªØ§Ø¨ÛŒØ³ Ø¬Ø¯Ø§ Ù†Ø¯Ø§Ø±Ø¯.'}</p>
-              <div className="sync-badge">{isGuest ? 'Guest Â· 5 Chat Â· 2 Image' : 'âœ“ Mobile â†” Desktop'}</div>
-            </aside>
-          </section>
-        ) : null}
-
-        {tab === 'voice' ? <DesktopVoiceChat ask={submitVoice} remaining={shownQuota.chatRemaining} /> : null}
-
-        {tab === 'codex' ? (isGuest ? <LoginRequired title="Codex" onExit={leaveSession} /> : <CodexStudio />) : null}
-
-        {false && tab === 'codex' ? (
-          isGuest ? <LoginRequired title="Codex" onExit={leaveSession} /> : (
-          <section className="workspace-layout">
-            <div className="workspace-main glass">
-              <div className="workspace-title">
-                <div><h2>Codex Pro Agent</h2><p>Ù¾Ø±ÙˆÚ˜Ù‡ Ø±Ø§ ØªØ­Ù„ÛŒÙ„ Ù…ÛŒâ€ŒÚ©Ù†Ø¯ØŒ ÙØ§ÛŒÙ„ ÙˆØ§Ù‚Ø¹ÛŒ Ø±Ø§ Ù…ÛŒâ€ŒØ®ÙˆØ§Ù†Ø¯ Ùˆ ØªØºÛŒÛŒØ± Ù…ÛŒâ€ŒØ¯Ù‡Ø¯ØŒ ØªØ³Øª/Ø¨ÛŒÙ„Ø¯ Ø±Ø§ Ø§Ø¬Ø±Ø§ Ù…ÛŒâ€ŒÚ©Ù†Ø¯ Ùˆ ØªØ§ Ù†ØªÛŒØ¬Ù‡ Ù…Ø¹ØªØ¨Ø± Ø±ÙˆÛŒ Ø®Ø·Ø§Ù‡Ø§ Ø§Ø¯Ø§Ù…Ù‡ Ù…ÛŒâ€ŒØ¯Ù‡Ø¯.</p></div>
-                <span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>{workspaceGranted ? 'Workspace approved' : 'No workspace'}</span>
-              </div>
-
-              <div className="field-row">
-                <input value={workspace} onChange={(event) => { setWorkspace(event.target.value); setWorkspaceGranted(false); }} placeholder="ÛŒÚ© Ù¾ÙˆØ´Ù‡ Ø§Ù†ØªØ®Ø§Ø¨ Ú©Ù† ÛŒØ§ Ù…Ø³ÛŒØ± Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†" />
-                <button className="secondary" onClick={browseWorkspace}>Browseâ€¦</button>
-                <button className="secondary" disabled={!workspace.trim()} onClick={() => grantWorkspace(workspace)}>Approve</button>
-              </div>
-
-              <div className="agent-task-card">
-                <div className="codex-command-presets">
-                  <span>Ø´Ø±ÙˆØ¹ Ø³Ø±ÛŒØ¹</span>
-                  <button disabled={agentRunning} onClick={() => setAgentTask('Ù¾Ø±ÙˆÚ˜Ù‡ Ø±Ø§ Ø¨Ø±Ø±Ø³ÛŒ Ú©Ù†ØŒ Ø®Ø·Ø§Ù‡Ø§ÛŒ Ù…Ù‡Ù… Ø±Ø§ Ù¾ÛŒØ¯Ø§ Ú©Ù† Ùˆ Ù‚Ø¨Ù„ Ø§Ø² Ù‡Ø± ØªØºÛŒÛŒØ± ÛŒÚ© Ø¨Ø±Ù†Ø§Ù…Ù‡ Ú©ÙˆØªØ§Ù‡ Ø§Ø±Ø§Ø¦Ù‡ Ø¨Ø¯Ù‡.')}>Ø¨Ø±Ø±Ø³ÛŒ Ù¾Ø±ÙˆÚ˜Ù‡</button>
-                  <button disabled={agentRunning} onClick={() => setAgentTask('ØªØ³Øªâ€ŒÙ‡Ø§ÛŒ Ù¾Ø±ÙˆÚ˜Ù‡ Ø±Ø§ Ø§Ø¬Ø±Ø§ Ú©Ù†ØŒ Ø¹Ù„Øª Ø®Ø·Ø§Ù‡Ø§ Ø±Ø§ Ù…Ø´Ø®Øµ Ú©Ù† Ùˆ Ø¨Ø§ Ú©Ù…ØªØ±ÛŒÙ† ØªØºÛŒÛŒØ± Ø§Ù…Ù† Ø§ØµÙ„Ø§Ø­Ø´Ø§Ù† Ú©Ù†.')}>Ø±ÙØ¹ ØªØ³Øªâ€ŒÙ‡Ø§</button>
-                  <button disabled={agentRunning} onClick={() => setAgentTask('Ú©Ø¯ Ø±Ø§ Ø§Ø² Ù†Ø¸Ø± Ø§Ù…Ù†ÛŒØªØŒ Ù¾Ø§ÛŒØ¯Ø§Ø±ÛŒ Ùˆ ØªØ¬Ø±Ø¨Ù‡ Ú©Ø§Ø±Ø¨Ø±ÛŒ Ø¨Ø±Ø±Ø³ÛŒ Ú©Ù† Ùˆ Ù…ÙˆØ§Ø±Ø¯ Ø¨Ø­Ø±Ø§Ù†ÛŒ Ø±Ø§ Ø§ØµÙ„Ø§Ø­ Ú©Ù†.')}>Ø¨Ø§Ø²Ø¨ÛŒÙ†ÛŒ Ø­Ø±ÙÙ‡â€ŒØ§ÛŒ</button>
-                </div>
-                <textarea
-                  value={agentTask}
-                  onChange={(event) => setAgentTask(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                      event.preventDefault();
-                      void runAgent();
-                    }
-                  }}
-                  placeholder="Ù‡Ø¯Ù Ø±Ø§ Ø·Ø¨ÛŒØ¹ÛŒ Ùˆ Ø¯Ù‚ÛŒÙ‚ Ø¨Ù†ÙˆÛŒØ³Ø› Ù…Ø«Ù„Ø§Ù‹ Ø®Ø·Ø§ÛŒ ÙˆØ±ÙˆØ¯ Ø±Ø§ Ù¾ÛŒØ¯Ø§ Ú©Ù†ØŒ ØªØ³Øª Ù…Ø±ØªØ¨Ø· Ø¨Ø³Ø§Ø²ØŒ Ø§ØµÙ„Ø§Ø­ Ú©Ù† Ùˆ Ù†ØªÛŒØ¬Ù‡ Ø±Ø§ Ú¯Ø²Ø§Ø±Ø´ Ø¨Ø¯Ù‡â€¦"
-                />
-                <div className="codex-safety-strip">
-                  <span>Ù…Ø­ØµÙˆØ± Ø¯Ø± Workspace</span><span>ØªØ£ÛŒÛŒØ¯ Ù‚Ø¨Ù„ Ø§Ø² ØªØºÛŒÛŒØ±</span><span>Backup Ø®ÙˆØ¯Ú©Ø§Ø±</span><span>Ctrl + Enter Ø¨Ø±Ø§ÛŒ Ø§Ø¬Ø±Ø§</span>
-                </div>
-                <div className="field-row">
-                  <button className="primary wide" disabled={!agentTask.trim() || agentRunning} onClick={runAgent}>{agentRunning ? 'Codex Ø¯Ø± Ø­Ø§Ù„ Ø§Ø¬Ø±Ø§Ø³Øªâ€¦' : 'Ø´Ø±ÙˆØ¹ Codex Agent'}</button>
-                  <button className="secondary" disabled={!agentRunning} onClick={stopAgent}>Stop Agent</button>
-                </div>
-              </div>
-
-              <div className="codex-columns">
-                <div className="file-browser">
-                  <div className="panel-head"><span>Workspace files</span><button onClick={() => workspaceGranted && agent.listDirectory(workspace)}>Refresh</button></div>
-                  <div className="file-list">
-                    {agent.entries.map((entry) => <button key={entry.path} onClick={() => entry.is_dir ? agent.listDirectory(entry.path) : openFile(entry.path)}><span>{entry.is_dir ? 'â–¸' : 'Â·'} {entry.name}</span><small>{entry.is_dir ? 'folder' : 'file'}</small></button>)}
-                    {agent.entries.length === 0 ? <div className="empty-mini">Ø¨Ø¹Ø¯ Ø§Ø² ApproveØŒ ÙØ§ÛŒÙ„â€ŒÙ‡Ø§ Ø§ÛŒÙ†Ø¬Ø§ Ø¯ÛŒØ¯Ù‡ Ù…ÛŒâ€ŒØ´ÙˆÙ†Ø¯.</div> : null}
-                  </div>
-                </div>
-
-                <div className="editor-panel">
-                  <div className="panel-head"><span>{selectedFile || 'File preview'}</span><button disabled={!selectedFile} onClick={saveSelectedFile}>Save</button></div>
-                  <textarea className="code-editor" value={editorValue} onChange={(event) => setEditorValue(event.target.value)} placeholder="ÙØ§ÛŒÙ„ Ø§Ù†ØªØ®Ø§Ø¨ÛŒ Ø§ÛŒÙ†Ø¬Ø§ Ù†Ù…Ø§ÛŒØ´ Ø¯Ø§Ø¯Ù‡ Ù…ÛŒâ€ŒØ´ÙˆØ¯â€¦" spellCheck={false} />
-                </div>
-              </div>
-            </div>
-
-            <aside className="inspector glass activity-inspector">
-              <h3>Permission Center</h3>
-              <Feature title="Workspace" value={workspaceGranted ? 'Approved' : 'Required'} ready={workspaceGranted} />
-              <Feature title="Read files" value={workspaceGranted ? 'Scoped' : 'Locked'} ready={workspaceGranted} />
-              <Feature title="Write files" value="Ask every time" ready />
-              <Feature title="Terminal" value="Ask every time" ready />
-              <Feature title="Auto backup" value="Enabled" ready />
-              <div className="divider" />
-              <h3>Live Activity</h3>
-              <div className="timeline">{agentTimeline.map((item, index) => <div key={`${index}-${item}`} className="timeline-item"><i /><span>{item}</span></div>)}{agentTimeline.length === 0 ? <p>Ù‡Ù†ÙˆØ² Task Ø§Ø¬Ø±Ø§ Ù†Ø´Ø¯Ù‡.</p> : null}</div>
-              <div className="divider" />
-              <h3>Safety</h3>
-              <ul><li>Read ÙÙ‚Ø· Ø¯Ø§Ø®Ù„ Workspace ØªØ£ÛŒÛŒØ¯Ø´Ø¯Ù‡</li><li>Write Ùˆ Terminal Ù†ÛŒØ§Ø²Ù…Ù†Ø¯ Approval Ù…Ø³ØªÙ‚ÛŒÙ…</li><li>Backup Ø®ÙˆØ¯Ú©Ø§Ø± Ù‚Ø¨Ù„ Ø§Ø² ØªØºÛŒÛŒØ± ÙØ§ÛŒÙ„</li><li>Ù…Ø³ÛŒØ± ÙˆØ§Ù‚Ø¹ÛŒ PC Ø¨Ù‡ Cloud planner Ø§Ø±Ø³Ø§Ù„ Ù†Ù…ÛŒâ€ŒØ´ÙˆØ¯</li><li>Ø¨Ø¯ÙˆÙ† shell Ø¢Ø²Ø§Ø¯ Ùˆ Ø¨Ø§ command allowlist</li><li>Stop Agent Ù‡Ù…ÛŒØ´Ù‡ Ø¯Ø± Ø¯Ø³ØªØ±Ø³ Ø§Ø³Øª</li></ul>
-            </aside>
-          </section>)
-        ) : null}
-
-        {false && tab === 'computer' ? (
-          isGuest ? <LoginRequired title="Computer" onExit={leaveSession} /> : (
-          <section className="workspace-layout">
-            <div className="workspace-main glass">
-              <div className="workspace-title"><div><h2>Computer</h2><p>Ú©Ù†ØªØ±Ù„ Local tools Ø¨Ø§ ØªØ£ÛŒÛŒØ¯ Ú©Ø§Ø±Ø¨Ø± Ùˆ Ù…Ø­Ø¯ÙˆØ¯Ù‡ Workspace.</p></div><span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>{workspaceGranted ? 'Permission active' : 'Manual tools'}</span></div>
-              <div className="field-row">
-                <input value={workspace} onChange={(event) => { setWorkspace(event.target.value); setWorkspaceGranted(false); }} placeholder="Workspace" />
-                <button className="secondary" onClick={browseWorkspace}>Browseâ€¦</button>
-                <button className="secondary" disabled={!workspace.trim()} onClick={() => grantWorkspace(workspace)}>Approve</button>
-              </div>
-              <div className="terminal-card">
-                <div className="terminal-fields"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="npm" /><input value={commandArgs} onChange={(event) => setCommandArgs(event.target.value)} placeholder="run test" /><button className="primary" disabled={!workspaceGranted || agent.busy} onClick={runManualCommand}>Run</button></div>
-                <pre>{agent.terminalOutput || 'Terminal output will appear here.'}</pre>
-              </div>
-              <div className="future-grid"><Feature title="Files" value="Active" ready /><Feature title="Terminal" value="Active" ready /><Feature title="Native folder picker" value="Active" ready /><Feature title="Auto backup" value="Active" ready /><Feature title="Browser" value="Next" /><Feature title="Screen Vision" value="Next" /></div>
-            </div>
-            <aside className="inspector glass activity-inspector"><h3>Local Agent log</h3><div className="timeline">{agent.logs.map((item, index) => <div className="timeline-item" key={`${index}-${item}`}><i /><span>{item}</span></div>)}</div></aside>
-          </section>)
-        ) : null}
-      </main>
-
-      {approval ? (
-        <div className="approval-backdrop"><div className="approval-modal glass"><div className="approval-icon">!</div><h2>{approval.title}</h2><pre>{approval.detail}</pre><p>Ø§ÛŒÙ† Ø¹Ù…Ù„ÛŒØ§Øª ÙÙ‚Ø· Ø¨Ø§ ØªØ£ÛŒÛŒØ¯ Ù…Ø³ØªÙ‚ÛŒÙ… Ø´Ù…Ø§ Ø§Ù†Ø¬Ø§Ù… Ù…ÛŒâ€ŒØ´ÙˆØ¯.</p><div className="approval-actions"><button className="secondary" onClick={() => resolveApproval(false)}>Ù„ØºÙˆ</button><button className="primary" onClick={() => resolveApproval(true)}>{approval.confirmLabel}</button></div></div></div>
-      ) : null}
-    </div>
-  );
-}
-
-function AuthScreen({ onAuthenticated, onGuest }: { onAuthenticated: () => void; onGuest: () => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [status, setStatus] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!email.trim() || password.length < 6 || busy) {
-      if (password.length < 6) setStatus('Ø±Ù…Ø² Ø¹Ø¨ÙˆØ± Ø¨Ø§ÛŒØ¯ Ø­Ø¯Ø§Ù‚Ù„ Û¶ Ú©Ø§Ø±Ø§Ú©ØªØ± Ø¨Ø§Ø´Ø¯.');
-      return;
-    }
-    setBusy(true);
-    setStatus('');
-    const result = mode === 'signin' ? await signIn(email, password) : await signUp(email, password);
-    setBusy(false);
-    if (!result.ok) return setStatus(result.message);
-    if (result.needsEmailConfirmation) {
-      setStatus('Ø§ÛŒÙ…ÛŒÙ„ ØªØ£ÛŒÛŒØ¯ Ø§Ø±Ø³Ø§Ù„ Ø´Ø¯. Ø¨Ø¹Ø¯ Ø§Ø² ØªØ£ÛŒÛŒØ¯ ÙˆØ§Ø±Ø¯ Ø­Ø³Ø§Ø¨ Ø´Ùˆ.');
-      setMode('signin');
-      return;
-    }
-    onAuthenticated();
-  }
-
-  return (
-    <div className="auth-screen">
-      <div className="auth-ambient" />
-      <section className="auth-card glass">
-        <img src="/app-icon.png" alt="FarsiAI" />
-        <h1>FarsiAI Desktop</h1>
-        <p>ÙˆØ±ÙˆØ¯ Ø¨Ø§ Ø­Ø³Ø§Ø¨ Ø§ØµÙ„ÛŒ: Û±Û° Ù¾ÛŒØ§Ù… Ùˆ Û´ ØªØµÙˆÛŒØ± Ø¯Ø± Ø±ÙˆØ² + Sync Ù…ÙˆØ¨Ø§ÛŒÙ„ Ùˆ Ø¯Ø³ØªØ±Ø³ÛŒ Codex.</p>
-        <div className="auth-tabs"><button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>ÙˆØ±ÙˆØ¯</button><button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Ø³Ø§Ø®Øª Ø­Ø³Ø§Ø¨</button></div>
-        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" dir="ltr" />
-        <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" dir="ltr" />
-        {status ? <div className="auth-status">{status}</div> : null}
-        <button className="primary wide" disabled={busy} onClick={submit}>{busy ? 'â€¦' : mode === 'signin' ? 'ÙˆØ±ÙˆØ¯ Ø¨Ù‡ FarsiAI' : 'Ø³Ø§Ø®Øª Ø­Ø³Ø§Ø¨'}</button>
-        <div className="divider" />
-        <button className="secondary wide" disabled={busy} onClick={onGuest}>Ø§Ø¯Ø§Ù…Ù‡ Ø¨Ù‡â€ŒØ¹Ù†ÙˆØ§Ù† Ù…Ù‡Ù…Ø§Ù†</button>
-        <small>Guest: Ø±ÙˆØ²Ø§Ù†Ù‡ Ûµ Ù¾ÛŒØ§Ù… + Û² ØªØµÙˆÛŒØ±. Codex Ø¨Ø±Ø§ÛŒ Ø§Ù…Ù†ÛŒØª Ù†ÛŒØ§Ø²Ù…Ù†Ø¯ ÙˆØ±ÙˆØ¯ Ø§Ø³Øª.</small>
-      </section>
-    </div>
-  );
-}
-
-function LoginRequired({ title, onExit }: { title: string; onExit: () => void }) {
-  return <section className="workspace-layout"><div className="workspace-main glass"><div className="welcome"><img src="/app-icon.png" alt="FarsiAI" /><h1>{title} Ù†ÛŒØ§Ø²Ù…Ù†Ø¯ ÙˆØ±ÙˆØ¯ Ø§Ø³Øª</h1><p>Ø¨Ø±Ø§ÛŒ Ø¯Ø³ØªØ±Ø³ÛŒ Ø¨Ù‡ PC Ùˆ Ø§Ø¬Ø±Ø§ÛŒ Ø¯Ø³ØªÙˆØ±ØŒ Ø§Ø¨ØªØ¯Ø§ Ø¨Ø§ Ø­Ø³Ø§Ø¨ FarsiAI ÙˆØ§Ø±Ø¯ Ø´Ùˆ.</p><button className="primary" onClick={onExit}>Ø±ÙØªÙ† Ø¨Ù‡ ØµÙØ­Ù‡ ÙˆØ±ÙˆØ¯</button></div></div></section>;
-}
-
-function NavButton({ active, label, caption, onClick }: { active: boolean; label: string; caption: string; onClick: () => void }) {
-  return <button className={active ? 'nav-button active' : 'nav-button'} onClick={onClick}><strong>{label}</strong><span>{caption}</span></button>;
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function Feature({ title, value, ready = false }: { title: string; value: string; ready?: boolean }) {
-  return <div className={ready ? 'feature-card ready' : 'feature-card'}><strong>{title}</strong><span>{value}</span></div>;
-}
+      setAgentTimeline(ç½ù¶‰žËkºwµçA±…ÍÍ9…µ”ô‰½µÁ½Í•ÈµÑ½½°ˆ‘¥Í…‰±•õíÍ•¹‘¥¹ô½¹±¥¬õì ¤€ôøÍ•ÑQ…ˆ Ù½¥”œ¥ôøñˆûŠ^$ð½ˆøñÍÁ…¸ûb×f#b«n0ð½ÍÁ…¸øð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰½µÁ½Í•ÈµÑ½½°ˆ‘¥Í…‰±•õíÍ•¹‘¥¹ô½¹±¥¬õì ¤€ôøÍ•ÑQ…ˆ ½‘•àœ¥ôøñˆûŠ2`ð½ˆøñÍÁ…¸ù½‘•àð½ÍÁ…¸øð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€€€ð½‘¥Øø(€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰½µÁ½Í•Èµ…Ñ¥½¹ÌˆøñÍÁ…¸±…ÍÍ9…µ”ô‰½µÁ½Í•Èµµ½‘•°ˆøñ¤€¼ø…ÉÍ¥$AÉ¼ð½ÍÁ…¸øñ‰ÕÑÑ½¸±…ÍÍ9…µ”õíÍ•¹‘¥¹œ€ü€½µÁ½Í•ÈµÍ•¹Í•¹‘¥¹œœ€è€½µÁ½Í•ÈµÍ•¹ô‘¥Í…‰±•õì……¹M•¹‘ô½¹±¥¬õì ¤€ôøÍÕ‰µ¥Ñ¡…Ð ¥ôÑ¥Ñ±”ô‹bŸbÇbÏbŸfƒfûn3bŸfˆùíÍ•¹‘¥¹œ€ü€ŸŠ‹Š‹Šˆœ€è€ŸŠDôð½‰ÕÑÑ½¸øð½‘¥Øø(€€€€€€€€€€€€€€€€ð½‘¥Øø(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰½µÁ½Í•ÈµÁ½±¥äˆûf#n3bÇbŸn3bÐƒb«b×f#n3bÄƒffbÜƒb£bœƒ
+¯f#n3bÇbŸn3bÐƒffn3fƒb«b×f#n3bÇ
+ìƒn3bœƒbÛfn3ffŠ3j§bÇb¿fƒb«b×f#n3bÄƒfbçbŸfƒfn3Š3bÓf#b¿blƒb«b×bŸf#n3bÄƒfb£fn0ƒb»f#b¿j§bŸbÄƒbŸbÏb«fbŸb¿fƒffn3Š3bÓf#fb¼¸ð½‘¥Øø4(€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ð½‘¥Øø4(4(€€€€€€€€€€€€ñ…Í¥‘”±…ÍÍ9…µ”ô‰¥¹ÍÁ•Ñ½È±…ÍÌˆø4(€€€€€€€€€€€€€€ñ Ìùí¥ÍÕ•ÍÐ€ü€Õ•ÍÐÍ•ÍÍ¥½¸œ€è€½Õ¹ÐÍå¹Œôð½ Ìø4(€€€€€€€€€€€€€€ñ%¹™¼±…‰•°ô‰A±…¸ˆÙ…±Õ”õí¥ÍÕ•ÍÐ€ü€Õ•ÍÐœ€è…½Õ¹Ð¹Á±…¹ô€¼ø4(€€€€€€€€€€€€€€ñ%¹™¼±…‰•°ô‰¡…Ðƒb£bŸfn3Š3fbŸfb¿fˆÙ…±Õ”õí€‘íÍ¡½Ý¹EÕ½Ñ„¹¡…ÑI•µ…¥¹¥¹ôƒbŸbÈ€‘í™Õ±±EÕ½Ñ„¹¡…ÑI•µ…¥¹¥¹õô€¼ø4(€€€€€€€€€€€€€€ñ%¹™¼±…‰•°ô‰%µ…”ƒb£bŸfn3Š3fbŸfb¿fˆÙ…±Õ”õí€‘íÍ¡½Ý¹EÕ½Ñ„¹¥µ…•I•µ…¥¹¥¹ôƒbŸbÈ€‘í™Õ±±EÕ½Ñ„¹¥µ…•I•µ…¥¹¥¹õô€¼ø4(€€€€€€€€€€€€€ì…¥ÍÕ•ÍÐ€ü€ñ%¹™¼±…‰•°ô‰µ…¥°ˆÙ…±Õ”õí…½Õ¹Ð¹•µ…¥°ñð€ŸŠPô€¼ø€è¹Õ±±ô4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰‘¥Ù¥‘•Èˆ€¼ø4(€€€€€€€€€€€€€€ñ Ìùí¥ÍÕ•ÍÐ€ü€AÉ¥Ù…äœ€è€M¡…É•‘…Ñ„ôð½ Ìø4(€€€€€€€€€€€€€€ñÀùí¥ÍÕ•ÍÐ€ü€Ÿb·bŸfb¨ƒfffbŸfƒb£fƒb«bŸbÇn3b»jfƒb·bÏbŸb ƒb¿bÏb«bÇbÏn0ƒfb¿bŸbÇb¼ƒf ½¹Ù•ÉÍ…Ñ¥½»fbœƒb¿bÄƒb·bÏbŸb ƒbÃb»n3bÇfƒffn3Š3bÓf#fb¼¸œ€è€½¹Ù•ÉÍ…Ñ¥½»fbœƒf ƒbÏffn3fƒbŸbÈƒffbŸfMÕÁ…‰…Í”ƒff#b£bŸn3fƒb»f#bŸfb¿fƒfn3Š3bÓf#fb¿bl•Í­Ñ½Àƒb¿n3b«bŸb£n3bÌƒb³b¿bœƒfb¿bŸbÇb¼¸ôð½Àø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Íå¹Œµ‰…‘”ˆùí¥ÍÕ•ÍÐ€ü€Õ•ÍÐƒ
+Ü€Ô¡…Ðƒ
+Ü€È%µ…”œ€è€ŸŠrL5½‰¥±”ƒŠP•Í­Ñ½Àôð½‘¥Øø4(€€€€€€€€€€€€ð½…Í¥‘”ø4(€€€€€€€€€€ð½Í•Ñ¥½¸ø4(€€€€€€€€¤€è¹Õ±±ô((€€€€€€€íÑ…ˆ€ôôô€Ù½¥”œ€ü€ñ•Í­Ñ½ÁY½¥•¡…Ð…Í¬õíÍÕ‰µ¥ÑY½¥•ôÉ•µ…¥¹¥¹œõíÍ¡½Ý¹EÕ½Ñ„¹¡…ÑI•µ…¥¹¥¹ô€¼ø€è¹Õ±±ô((€€€€€€€íÑ…ˆ€ôôô€½‘•àœ€ü€¡¥ÍÕ•ÍÐ€ü€ñ1½¥¹I•ÅÕ¥É•Ñ¥Ñ±”ô‰½‘•àˆ½¹á¥Ðõí±•…Ù•M•ÍÍ¥½¹ô€¼ø€è€ñ½‘•áMÑÕ‘¥¼€¼ø¤€è¹Õ±±ô((€€€€€€€í™…±Í”€˜˜Ñ…ˆ€ôôô€½‘•àœ€ü€ (€€€€€€€€€¥ÍÕ•ÍÐ€ü€ñ1½¥¹I•ÅÕ¥É•Ñ¥Ñ±”ô‰½‘•àˆ½¹á¥Ðõí±•…Ù•M•ÍÍ¥½¹ô€¼ø€è€ 4(€€€€€€€€€€ñÍ•Ñ¥½¸±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µ±…å½ÕÐˆø4(€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µµ…¥¸±…ÍÌˆø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µÑ¥Ñ±”ˆø4(€€€€€€€€€€€€€€€€ñ‘¥Øøñ Èù½‘•àAÉ¼•¹Ðð½ ÈøñÀûfûbÇf#jcfƒbÇbœƒb«b·fn3fƒfn3Š3j§fb¿b0ƒfbŸn3fƒf#bŸfbçn0ƒbÇbœƒfn3Š3b»f#bŸfb¼ƒf ƒb«bën3n3bÄƒfn3Š3b¿fb¿b0ƒb«bÏb¨¿b£n3fb¼ƒbÇbœƒbŸb³bÇbœƒfn3Š3j§fb¼ƒf ƒb«bœƒfb«n3b³fƒfbçb«b£bÄƒbÇf#n0ƒb»bßbŸfbœƒbŸb¿bŸffƒfn3Š3b¿fb¼¸ð½Àøð½‘¥Øø4(€€€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÍ9…µ”õíÝ½É­ÍÁ…•É…¹Ñ•€ü€Ý½É­ÍÁ…”µÍÑ…ÑÕÌÉ•…‘äœ€è€Ý½É­ÍÁ…”µÍÑ…ÑÕÌôùíÝ½É­ÍÁ…•É…¹Ñ•€ü€]½É­ÍÁ…”…ÁÁÉ½Ù•œ€è€9¼Ý½É­ÍÁ…”ôð½ÍÁ…¸ø4(€€€€€€€€€€€€€€ð½‘¥Øø4(4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥•±µÉ½Üˆø4(€€€€€€€€€€€€€€€€ñ¥¹ÁÕÐÙ…±Õ”õíÝ½É­ÍÁ…•ô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøìÍ•Ñ]½É­ÍÁ…”¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¤ìÍ•Ñ]½É­ÍÁ…•É…¹Ñ•¡™…±Í”¤ìõôÁ±…•¡½±‘•Èô‹n3j¤ƒfûf#bÓfƒbŸfb«b»bŸb ƒj§fƒn3bœƒfbÏn3bÄƒbÇbœƒf#bŸbÇb¼ƒj§fˆ€¼ø4(€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…Éäˆ½¹±¥¬õí‰É½ÝÍ•]½É­ÍÁ…•ôù	É½ÝÍ—Š˜ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…Éäˆ‘¥Í…‰±•õì…Ý½É­ÍÁ…”¹ÑÉ¥´ ¥ô½¹±¥¬õì ¤€ôøÉ…¹Ñ]½É­ÍÁ…”¡Ý½É­ÍÁ…”¥ôùÁÁÉ½Ù”ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€ð½‘¥Øø((€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…•¹ÐµÑ…Í¬µ…Éˆø(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰½‘•àµ½µµ…¹µÁÉ•Í•ÑÌˆø(€€€€€€€€€€€€€€€€€€ñÍÁ…¸ûbÓbÇf#bäƒbÏbÇn3bäð½ÍÁ…¸ø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸‘¥Í…‰±•õí…•¹ÑIÕ¹¹¥¹ô½¹±¥¬õì ¤€ôøÍ•Ñ•¹ÑQ…Í¬ ŸfûbÇf#jcfƒbÇbœƒb£bÇbÇbÏn0ƒj§fb0ƒb»bßbŸfbŸn0ƒfffƒbÇbœƒfûn3b¿bœƒj§fƒf ƒfb£fƒbŸbÈƒfbÄƒb«bën3n3bÄƒn3j¤ƒb£bÇfbŸffƒj§f#b«bŸfƒbŸbÇbŸb›fƒb£b¿f¸œ¥ôûb£bÇbÇbÏn0ƒfûbÇf#jcfð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸‘¥Í…‰±•õí…•¹ÑIÕ¹¹¥¹ô½¹±¥¬õì ¤€ôøÍ•Ñ•¹ÑQ…Í¬ Ÿb«bÏb«Š3fbŸn0ƒfûbÇf#jcfƒbÇbœƒbŸb³bÇbœƒj§fb0ƒbçfb¨ƒb»bßbŸfbœƒbÇbœƒfbÓb»bÔƒj§fƒf ƒb£bœƒj§fb«bÇn3fƒb«bën3n3bÄƒbŸffƒbŸb×fbŸb·bÓbŸfƒj§f¸œ¥ôûbÇfbäƒb«bÏb«Š3fbœð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸‘¥Í…‰±•õí…•¹ÑIÕ¹¹¥¹ô½¹±¥¬õì ¤€ôøÍ•Ñ•¹ÑQ…Í¬ Ÿj§b¼ƒbÇbœƒbŸbÈƒfbãbÄƒbŸffn3b«b0ƒfûbŸn3b¿bŸbÇn0ƒf ƒb«b³bÇb£fƒj§bŸbÇb£bÇn0ƒb£bÇbÇbÏn0ƒj§fƒf ƒff#bŸbÇb¼ƒb£b·bÇbŸfn0ƒbÇbœƒbŸb×fbŸb´ƒj§f¸œ¥ôûb£bŸbËb£n3fn0ƒb·bÇffŠ3bŸn0ð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€ð½‘¥Øø(€€€€€€€€€€€€€€€€ñÑ•áÑ…É•„(€€€€€€€€€€€€€€€€€Ù…±Õ”õí…•¹ÑQ…Í­ô(€€€€€€€€€€€€€€€€€½¹¡…¹”õì¡•Ù•¹Ð¤€ôøÍ•Ñ•¹ÑQ…Í¬¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¥ô(€€€€€€€€€€€€€€€€€½¹-•å½Ý¸õì¡•Ù•¹Ð¤€ôøì(€€€€€€€€€€€€€€€€€€€¥˜€ ¡•Ù•¹Ð¹ÑÉ±-•äñð•Ù•¹Ð¹µ•Ñ…-•ä¤€˜˜•Ù•¹Ð¹­•ä€ôôô€¹Ñ•Èœ¤ì(€€€€€€€€€€€€€€€€€€€€€•Ù•¹Ð¹ÁÉ•Ù•¹Ñ•™…Õ±Ð ¤ì(€€€€€€€€€€€€€€€€€€€€€Ù½¥ÉÕ¹•¹Ð ¤ì(€€€€€€€€€€€€€€€€€€€ô(€€€€€€€€€€€€€€€€€õô(€€€€€€€€€€€€€€€€€Á±…•¡½±‘•Èô‹fb¿fƒbÇbœƒbßb£n3bçn0ƒf ƒb¿fn3fƒb£ff#n3bÏblƒfb¯fbŸf,ƒb»bßbŸn0ƒf#bÇf#b¼ƒbÇbœƒfûn3b¿bœƒj§fb0ƒb«bÏb¨ƒfbÇb«b£bÜƒb£bÏbŸbËb0ƒbŸb×fbŸb´ƒj§fƒf ƒfb«n3b³fƒbÇbœƒj¿bËbŸbÇbÐƒb£b¿fŠ˜ˆ(€€€€€€€€€€€€€€€€¼ø(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰½‘•àµÍ…™•ÑäµÍÑÉ¥Àˆø(€€€€€€€€€€€€€€€€€€ñÍÁ…¸ûfb·b×f#bÄƒb¿bÄ]½É­ÍÁ…”ð½ÍÁ…¸øñÍÁ…¸ûb«bn3n3b¼ƒfb£fƒbŸbÈƒb«bën3n3bÄð½ÍÁ…¸øñÍÁ…¸ù	…­ÕÀƒb»f#b¿j§bŸbÄð½ÍÁ…¸øñÍÁ…¸ùÑÉ°€¬¹Ñ•Èƒb£bÇbŸn0ƒbŸb³bÇbœð½ÍÁ…¸ø(€€€€€€€€€€€€€€€€ð½‘¥Øø(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥•±µÉ½Üˆø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰ÁÉ¥µ…ÉäÝ¥‘”ˆ‘¥Í…‰±•õì……•¹ÑQ…Í¬¹ÑÉ¥´ ¤ñð…•¹ÑIÕ¹¹¥¹ô½¹±¥¬õíÉÕ¹•¹Ñôùí…•¹ÑIÕ¹¹¥¹œ€ü€½‘•àƒb¿bÄƒb·bŸfƒbŸb³bÇbŸbÏb«Š˜œ€è€ŸbÓbÇf#bä½‘•à•¹Ðôð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…Éäˆ‘¥Í…‰±•õì……•¹ÑIÕ¹¹¥¹ô½¹±¥¬õíÍÑ½Á•¹ÑôùMÑ½À•¹Ðð½‰ÕÑÑ½¸ø(€€€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€ð½‘¥Øø4(4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰½‘•àµ½±Õµ¹Ìˆø4(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥±”µ‰É½ÝÍ•Èˆø4(€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Á…¹•°µ¡•…ˆøñÍÁ…¸ù]½É­ÍÁ…”™¥±•Ìð½ÍÁ…¸øñ‰ÕÑÑ½¸½¹±¥¬õì ¤€ôøÝ½É­ÍÁ…•É…¹Ñ•€˜˜…•¹Ð¹±¥ÍÑ¥É•Ñ½Éä¡Ý½É­ÍÁ…”¥ôùI•™É•Í ð½‰ÕÑÑ½¸øð½‘¥Øø4(€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥±”µ±¥ÍÐˆø4(€€€€€€€€€€€€€€€€€€€í…•¹Ð¹•¹ÑÉ¥•Ì¹µ…À ¡•¹ÑÉä¤€ôø€ñ‰ÕÑÑ½¸­•äõí•¹ÑÉä¹Á…Ñ¡ô½¹±¥¬õì ¤€ôø•¹ÑÉä¹¥Í}‘¥È€ü…•¹Ð¹±¥ÍÑ¥É•Ñ½Éä¡•¹ÑÉä¹Á…Ñ ¤€è½Á•¹¥±”¡•¹ÑÉä¹Á…Ñ ¥ôøñÍÁ…¸ùí•¹ÑÉä¹¥Í}‘¥È€ü€ŸŠZàœ€è€Ÿ
+Üôí•¹ÑÉä¹¹…µ•ôð½ÍÁ…¸øñÍµ…±°ùí•¹ÑÉä¹¥Í}‘¥È€ü€™½±‘•Èœ€è€™¥±”ôð½Íµ…±°øð½‰ÕÑÑ½¸ø¥ô4(€€€€€€€€€€€€€€€€€€€í…•¹Ð¹•¹ÑÉ¥•Ì¹±•¹Ñ €ôôô€À€ü€ñ‘¥Ø±…ÍÍ9…µ”ô‰•µÁÑäµµ¥¹¤ˆûb£bçb¼ƒbŸbÈÁÁÉ½Ù—b0ƒfbŸn3fŠ3fbœƒbŸn3fb³bœƒb¿n3b¿fƒfn3Š3bÓf#fb¼¸ð½‘¥Øø€è¹Õ±±ô4(€€€€€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€€€ð½‘¥Øø4(4(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰•‘¥Ñ½ÈµÁ…¹•°ˆø4(€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Á…¹•°µ¡•…ˆøñÍÁ…¸ùíÍ•±•Ñ•‘¥±”ñð€¥±”ÁÉ•Ù¥•Üôð½ÍÁ…¸øñ‰ÕÑÑ½¸‘¥Í…‰±•õì…Í•±•Ñ•‘¥±•ô½¹±¥¬õíÍ…Ù•M•±•Ñ•‘¥±•ôùM…Ù”ð½‰ÕÑÑ½¸øð½‘¥Øø4(€€€€€€€€€€€€€€€€€€ñÑ•áÑ…É•„±…ÍÍ9…µ”ô‰½‘”µ•‘¥Ñ½ÈˆÙ…±Õ”õí•‘¥Ñ½ÉY…±Õ•ô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøÍ•Ñ‘¥Ñ½ÉY…±Õ”¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¥ôÁ±…•¡½±‘•Èô‹fbŸn3fƒbŸfb«b»bŸb£n0ƒbŸn3fb³bœƒffbŸn3bÐƒb¿bŸb¿fƒfn3Š3bÓf#b¿Š˜ˆÍÁ•±±¡•¬õí™…±Í•ô€¼ø4(€€€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ð½‘¥Øø4(4(€€€€€€€€€€€€ñ…Í¥‘”±…ÍÍ9…µ”ô‰¥¹ÍÁ•Ñ½È±…ÍÌ…Ñ¥Ù¥Ñäµ¥¹ÍÁ•Ñ½Èˆø4(€€€€€€€€€€€€€€ñ ÌùA•Éµ¥ÍÍ¥½¸•¹Ñ•Èð½ Ìø4(€€€€€€€€€€€€€€ñ•…ÑÕÉ”Ñ¥Ñ±”ô‰]½É­ÍÁ…”ˆÙ…±Õ”õíÝ½É­ÍÁ…•É…¹Ñ•€ü€ÁÁÉ½Ù•œ€è€I•ÅÕ¥É•ôÉ•…‘äõíÝ½É­ÍÁ…•É…¹Ñ•‘ô€¼ø4(€€€€€€€€€€€€€€ñ•…ÑÕÉ”Ñ¥Ñ±”ô‰I•…™¥±•ÌˆÙ…±Õ”õíÝ½É­ÍÁ…•É…¹Ñ•€ü€M½Á•œ€è€1½­•ôÉ•…‘äõíÝ½É­ÍÁ…•É…¹Ñ•‘ô€¼ø4(€€€€€€€€€€€€€€ñ•…ÑÕÉ”Ñ¥Ñ±”ô‰]É¥Ñ”™¥±•ÌˆÙ…±Õ”ô‰Í¬•Ù•ÉäÑ¥µ”ˆÉ•…‘ä€¼ø4(€€€€€€€€€€€€€€ñ•…ÑÕÉ”Ñ¥Ñ±”ô‰Q•Éµ¥¹…°ˆÙ…±Õ”ô‰Í¬•Ù•ÉäÑ¥µ”ˆÉ•…‘ä€¼ø4(€€€€€€€€€€€€€€ñ•…ÑÕÉ”Ñ¥Ñ±”ô‰ÕÑ¼‰…­ÕÀˆÙ…±Õ”ô‰¹…‰±•ˆÉ•…‘ä€¼ø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰‘¥Ù¥‘•Èˆ€¼ø4(€€€€€€€€€€€€€€ñ Ìù1¥Ù”Ñ¥Ù¥Ñäð½ Ìø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ¥µ•±¥¹”ˆùí…•¹ÑQ¥µ•±¥¹”¹µ…À ¡¥Ñ•´°¥¹‘•à¤€ôø€ñ‘¥Ø­•äõí€‘í¥¹‘•áô´‘í¥Ñ•µõô±…ÍÍ9…µ”ô‰Ñ¥µ•±¥¹”µ¥Ñ•´ˆøñ¤€¼øñÍÁ…¸ùí¥Ñ•µôð½ÍÁ…¸øð½‘¥Øø¥õí…•¹ÑQ¥µ•±¥¹”¹±•¹Ñ €ôôô€À€ü€ñÀûfff#bÈQ…Í¬ƒbŸb³bÇbœƒfbÓb¿f¸ð½Àø€è¹Õ±±ôð½‘¥Øø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰‘¥Ù¥‘•Èˆ€¼ø4(€€€€€€€€€€€€€€ñ ÌùM…™•Ñäð½ Ìø4(€€€€€€€€€€€€€€ñÕ°øñ±¤ùI•…ƒffbÜƒb¿bŸb»f]½É­ÍÁ…”ƒb«bn3n3b¿bÓb¿fð½±¤øñ±¤ù]É¥Ñ”ƒf Q•Éµ¥¹…°ƒfn3bŸbËffb¼ÁÁÉ½Ù…°ƒfbÏb«fn3fð½±¤øñ±¤ù	…­ÕÀƒb»f#b¿j§bŸbÄƒfb£fƒbŸbÈƒb«bën3n3bÄƒfbŸn3fð½±¤øñ±¤ûfbÏn3bÄƒf#bŸfbçn0Aƒb£f±½ÕÁ±…¹¹•ÈƒbŸbÇbÏbŸfƒffn3Š3bÓf#b¼ð½±¤øñ±¤ûb£b¿f#fÍ¡•±°ƒb‹bËbŸb¼ƒf ƒb£bœ½µµ…¹…±±½Ý±¥ÍÐð½±¤øñ±¤ùMÑ½À•¹Ðƒffn3bÓfƒb¿bÄƒb¿bÏb«bÇbÌƒbŸbÏb¨ð½±¤øð½Õ°ø4(€€€€€€€€€€€€ð½…Í¥‘”ø4(€€€€€€€€€€ð½Í•Ñ¥½¸ø¤4(€€€€€€€€¤€è¹Õ±±ô4(4(€€€€€€€í™…±Í”€˜˜Ñ…ˆ€ôôô€½µÁÕÑ•Èœ€ü€ (€€€€€€€€€¥ÍÕ•ÍÐ€ü€ñ1½¥¹I•ÅÕ¥É•Ñ¥Ñ±”ô‰½µÁÕÑ•Èˆ½¹á¥Ðõí±•…Ù•M•ÍÍ¥½¹ô€¼ø€è€ 4(€€€€€€€€€€ñÍ•Ñ¥½¸±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µ±…å½ÕÐˆø4(€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µµ…¥¸±…ÍÌˆø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µÑ¥Ñ±”ˆøñ‘¥Øøñ Èù½µÁÕÑ•Èð½ ÈøñÀûj§fb«bÇf1½…°Ñ½½±Ìƒb£bœƒb«bn3n3b¼ƒj§bŸbÇb£bÄƒf ƒfb·b¿f#b¿f]½É­ÍÁ…”¸ð½Àøð½‘¥ØøñÍÁ…¸±…ÍÍ9…µ”õíÝ½É­ÍÁ…•É…¹Ñ•€ü€Ý½É­ÍÁ…”µÍÑ…ÑÕÌÉ•…‘äœ€è€Ý½É­ÍÁ…”µÍÑ…ÑÕÌôùíÝ½É­ÍÁ…•É…¹Ñ•€ü€A•Éµ¥ÍÍ¥½¸…Ñ¥Ù”œ€è€5…¹Õ…°Ñ½½±Ìôð½ÍÁ…¸øð½‘¥Øø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥•±µÉ½Üˆø4(€€€€€€€€€€€€€€€€ñ¥¹ÁÕÐÙ…±Õ”õíÝ½É­ÍÁ…•ô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøìÍ•Ñ]½É­ÍÁ…”¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¤ìÍ•Ñ]½É­ÍÁ…•É…¹Ñ•¡™…±Í”¤ìõôÁ±…•¡½±‘•Èô‰]½É­ÍÁ…”ˆ€¼ø4(€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…Éäˆ½¹±¥¬õí‰É½ÝÍ•]½É­ÍÁ…•ôù	É½ÝÍ—Š˜ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…Éäˆ‘¥Í…‰±•õì…Ý½É­ÍÁ…”¹ÑÉ¥´ ¥ô½¹±¥¬õì ¤€ôøÉ…¹Ñ]½É­ÍÁ…”¡Ý½É­ÍÁ…”¥ôùÁÁÉ½Ù”ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ•Éµ¥¹…°µ…Éˆø4(€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ•Éµ¥¹…°µ™¥•±‘Ìˆøñ¥¹ÁÕÐÙ…±Õ”õí½µµ…¹‘ô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøÍ•Ñ½µµ…¹¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¥ôÁ±…•¡½±‘•Èô‰¹Á´ˆ€¼øñ¥¹ÁÕÐÙ…±Õ”õí½µµ…¹‘ÉÍô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøÍ•Ñ½µµ…¹‘ÉÌ¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¥ôÁ±…•¡½±‘•Èô‰ÉÕ¸Ñ•ÍÐˆ€¼øñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰ÁÉ¥µ…Éäˆ‘¥Í…‰±•õì…Ý½É­ÍÁ…•É…¹Ñ•ñð…•¹Ð¹‰ÕÍåô½¹±¥¬õíÉÕ¹5…¹Õ…±½µµ…¹‘ôùIÕ¸ð½‰ÕÑÑ½¸øð½‘¥Øø4(€€€€€€€€€€€€€€€€ñÁÉ”ùí…•¹Ð¹Ñ•Éµ¥¹…±=ÕÑÁÕÐñð€Q•Éµ¥¹…°½ÕÑÁÕÐÝ¥±°…ÁÁ•…È¡•É”¸ôð½ÁÉ”ø4(€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™ÕÑÕÉ”µÉ¥ˆøñ•…ÑÕÉ”Ñ¥Ñ±”ô‰¥±•ÌˆÙ…±Õ”ô‰Ñ¥Ù”ˆÉ•…‘ä€¼øñ•…ÑÕÉ”Ñ¥Ñ±”ô‰Q•Éµ¥¹…°ˆÙ…±Õ”ô‰Ñ¥Ù”ˆÉ•…‘ä€¼øñ•…ÑÕÉ”Ñ¥Ñ±”ô‰9…Ñ¥Ù”™½±‘•ÈÁ¥­•ÈˆÙ…±Õ”ô‰Ñ¥Ù”ˆÉ•…‘ä€¼øñ•…ÑÕÉ”Ñ¥Ñ±”ô‰ÕÑ¼‰…­ÕÀˆÙ…±Õ”ô‰Ñ¥Ù”ˆÉ•…‘ä€¼øñ•…ÑÕÉ”Ñ¥Ñ±”ô‰	É½ÝÍ•ÈˆÙ…±Õ”ô‰9•áÐˆ€¼øñ•…ÑÕÉ”Ñ¥Ñ±”ô‰MÉ••¸Y¥Í¥½¸ˆÙ…±Õ”ô‰9•áÐˆ€¼øð½‘¥Øø4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ñ…Í¥‘”±…ÍÍ9…µ”ô‰¥¹ÍÁ•Ñ½È±…ÍÌ…Ñ¥Ù¥Ñäµ¥¹ÍÁ•Ñ½Èˆøñ Ìù1½…°•¹Ð±½œð½ Ìøñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ¥µ•±¥¹”ˆùí…•¹Ð¹±½Ì¹µ…À ¡¥Ñ•´°¥¹‘•à¤€ôø€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ¥µ•±¥¹”µ¥Ñ•´ˆ­•äõí€‘í¥¹‘•áô´‘í¥Ñ•µõôøñ¤€¼øñÍÁ…¸ùí¥Ñ•µôð½ÍÁ…¸øð½‘¥Øø¥ôð½‘¥Øøð½…Í¥‘”ø4(€€€€€€€€€€ð½Í•Ñ¥½¸ø¤4(€€€€€€€€¤€è¹Õ±±ô4(€€€€€€ð½µ…¥¸ø4(4(€€€€€í…ÁÁÉ½Ù…°€ü€ 4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÁÁÉ½Ù…°µ‰…­‘É½Àˆøñ‘¥Ø±…ÍÍ9…µ”ô‰…ÁÁÉ½Ù…°µµ½‘…°±…ÍÌˆøñ‘¥Ø±…ÍÍ9…µ”ô‰…ÁÁÉ½Ù…°µ¥½¸ˆø„ð½‘¥Øøñ Èùí…ÁÁÉ½Ù…°¹Ñ¥Ñ±•ôð½ ÈøñÁÉ”ùí…ÁÁÉ½Ù…°¹‘•Ñ…¥±ôð½ÁÉ”øñÀûbŸn3fƒbçffn3bŸb¨ƒffbÜƒb£bœƒb«bn3n3b¼ƒfbÏb«fn3fƒbÓfbœƒbŸfb³bŸfƒfn3Š3bÓf#b¼¸ð½Àøñ‘¥Ø±…ÍÍ9…µ”ô‰…ÁÁÉ½Ù…°µ…Ñ¥½¹Ìˆøñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…Éäˆ½¹±¥¬õì ¤€ôøÉ•Í½±Ù•ÁÁÉ½Ù…°¡™…±Í”¥ôûfbëf ð½‰ÕÑÑ½¸øñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰ÁÉ¥µ…Éäˆ½¹±¥¬õì ¤€ôøÉ•Í½±Ù•ÁÁÉ½Ù…°¡ÑÉÕ”¥ôùí…ÁÁÉ½Ù…°¹½¹™¥Éµ1…‰•±ôð½‰ÕÑÑ½¸øð½‘¥Øøð½‘¥Øøð½‘¥Øø4(€€€€€€¤€è¹Õ±±ô4(€€€€ð½‘¥Øø4(€€¤ì4)ô4(4)™Õ¹Ñ¥½¸ÕÑ¡MÉ••¸¡ì½¹ÕÑ¡•¹Ñ¥…Ñ•°½¹Õ•ÍÐôèì½¹ÕÑ¡•¹Ñ¥…Ñ•è€ ¤€ôøÙ½¥ì½¹Õ•ÍÐè€ ¤€ôøÙ½¥ô¤ì4(€½¹ÍÐm•µ…¥°°Í•Ñµ…¥±t€ôÕÍ•MÑ…Ñ” œœ¤ì4(€½¹ÍÐmÁ…ÍÍÝ½É°Í•ÑA…ÍÍÝ½É‘t€ôÕÍ•MÑ…Ñ” œœ¤ì4(€½¹ÍÐmµ½‘”°Í•Ñ5½‘•t€ôÕÍ•MÑ…Ñ”ðÍ¥¹¥¸œð€Í¥¹ÕÀœø Í¥¹¥¸œ¤ì4(€½¹ÍÐmÍÑ…ÑÕÌ°Í•ÑMÑ…ÑÕÍt€ôÕÍ•MÑ…Ñ” œœ¤ì4(€½¹ÍÐm‰ÕÍä°Í•Ñ	ÕÍåt€ôÕÍ•MÑ…Ñ”¡™…±Í”¤ì4(4(€…Íå¹Œ™Õ¹Ñ¥½¸ÍÕ‰µ¥Ð ¤ì4(€€€¥˜€ …•µ…¥°¹ÑÉ¥´ ¤ñðÁ…ÍÍÝ½É¹±•¹Ñ €ð€Øñð‰ÕÍä¤ì4(€€€€€¥˜€¡Á…ÍÍÝ½É¹±•¹Ñ €ð€Ø¤Í•ÑMÑ…ÑÕÌ ŸbÇfbÈƒbçb£f#bÄƒb£bŸn3b¼ƒb·b¿bŸffƒnØƒj§bŸbÇbŸj§b«bÄƒb£bŸbÓb¼¸œ¤ì4(€€€€€É•ÑÕÉ¸ì4(€€€ô4(€€€Í•Ñ	ÕÍä¡ÑÉÕ”¤ì4(€€€Í•ÑMÑ…ÑÕÌ œœ¤ì4(€€€½¹ÍÐÉ•ÍÕ±Ð€ôµ½‘”€ôôô€Í¥¹¥¸œ€ü…Ý…¥ÐÍ¥¹%¸¡•µ…¥°°Á…ÍÍÝ½É¤€è…Ý…¥ÐÍ¥¹UÀ¡•µ…¥°°Á…ÍÍÝ½É¤ì4(€€€Í•Ñ	ÕÍä¡™…±Í”¤ì4(€€€¥˜€ …É•ÍÕ±Ð¹½¬¤É•ÑÕÉ¸Í•ÑMÑ…ÑÕÌ¡É•ÍÕ±Ð¹µ•ÍÍ…”¤ì4(€€€¥˜€¡É•ÍÕ±Ð¹¹••‘Íµ…¥±½¹™¥Éµ…Ñ¥½¸¤ì4(€€€€€Í•ÑMÑ…ÑÕÌ ŸbŸn3fn3fƒb«bn3n3b¼ƒbŸbÇbÏbŸfƒbÓb¼¸ƒb£bçb¼ƒbŸbÈƒb«bn3n3b¼ƒf#bŸbÇb¼ƒb·bÏbŸb ƒbÓf ¸œ¤ì4(€€€€€Í•Ñ5½‘” Í¥¹¥¸œ¤ì4(€€€€€É•ÑÕÉ¸ì4(€€€ô4(€€€½¹ÕÑ¡•¹Ñ¥…Ñ• ¤ì4(€ô4(4(€É•ÑÕÉ¸€ 4(€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÕÑ µÍÉ••¸ˆø4(€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÕÑ µ…µ‰¥•¹Ðˆ€¼ø4(€€€€€€ñÍ•Ñ¥½¸±…ÍÍ9…µ”ô‰…ÕÑ µ…É±…ÍÌˆø4(€€€€€€€€ñ¥µœÍÉŒôˆ½…ÁÀµ¥½¸¹Á¹œˆ…±Ðô‰…ÉÍ¥$ˆ€¼ø4(€€€€€€€€ñ Äù…ÉÍ¥$•Í­Ñ½Àð½ Äø4(€€€€€€€€ñÀûf#bÇf#b¼ƒb£bœƒb·bÏbŸb ƒbŸb×fn0èƒnÇnÀƒfûn3bŸfƒf ƒnÐƒb«b×f#n3bÄƒb¿bÄƒbÇf#bÈ€¬Må¹Œƒff#b£bŸn3fƒf ƒb¿bÏb«bÇbÏn0½‘•à¸ð½Àø4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÕÑ µÑ…‰Ìˆøñ‰ÕÑÑ½¸±…ÍÍ9…µ”õíµ½‘”€ôôô€Í¥¹¥¸œ€ü€…Ñ¥Ù”œ€è€œô½¹±¥¬õì ¤€ôøÍ•Ñ5½‘” Í¥¹¥¸œ¥ôûf#bÇf#b¼ð½‰ÕÑÑ½¸øñ‰ÕÑÑ½¸±…ÍÍ9…µ”õíµ½‘”€ôôô€Í¥¹ÕÀœ€ü€…Ñ¥Ù”œ€è€œô½¹±¥¬õì ¤€ôøÍ•Ñ5½‘” Í¥¹ÕÀœ¥ôûbÏbŸb»b¨ƒb·bÏbŸb ð½‰ÕÑÑ½¸øð½‘¥Øø4(€€€€€€€€ñ¥¹ÁÕÐÙ…±Õ”õí•µ…¥±ô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøÍ•Ñµ…¥°¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¥ôÁ±…•¡½±‘•Èô‰µ…¥°ˆÑåÁ”ô‰•µ…¥°ˆ‘¥Èô‰±ÑÈˆ€¼ø4(€€€€€€€€ñ¥¹ÁÕÐÙ…±Õ”õíÁ…ÍÍÝ½É‘ô½¹¡…¹”õì¡•Ù•¹Ð¤€ôøÍ•ÑA…ÍÍÝ½É¡•Ù•¹Ð¹Ñ…É•Ð¹Ù…±Õ”¥ôÁ±…•¡½±‘•Èô‰A…ÍÍÝ½ÉˆÑåÁ”ô‰Á…ÍÍÝ½Éˆ‘¥Èô‰±ÑÈˆ€¼ø4(€€€€€€€íÍÑ…ÑÕÌ€ü€ñ‘¥Ø±…ÍÍ9…µ”ô‰…ÕÑ µÍÑ…ÑÕÌˆùíÍÑ…ÑÕÍôð½‘¥Øø€è¹Õ±±ô4(€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰ÁÉ¥µ…ÉäÝ¥‘”ˆ‘¥Í…‰±•õí‰ÕÍåô½¹±¥¬õíÍÕ‰µ¥Ñôùí‰ÕÍä€ü€ŸŠ˜œ€èµ½‘”€ôôô€Í¥¹¥¸œ€ü€Ÿf#bÇf#b¼ƒb£f…ÉÍ¥$œ€è€ŸbÏbŸb»b¨ƒb·bÏbŸb ôð½‰ÕÑÑ½¸ø4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰‘¥Ù¥‘•Èˆ€¼ø4(€€€€€€€€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰Í•½¹‘…ÉäÝ¥‘”ˆ‘¥Í…‰±•õí‰ÕÍåô½¹±¥¬õí½¹Õ•ÍÑôûbŸb¿bŸffƒb£fŠ3bçff#bŸfƒfffbŸfð½‰ÕÑÑ½¸ø4(€€€€€€€€ñÍµ…±°ùÕ•ÍÐèƒbÇf#bËbŸffƒnÔƒfûn3bŸf€¬ƒnÈƒb«b×f#n3bÄ¸½‘•àƒb£bÇbŸn0ƒbŸffn3b¨ƒfn3bŸbËffb¼ƒf#bÇf#b¼ƒbŸbÏb¨¸ð½Íµ…±°ø4(€€€€€€ð½Í•Ñ¥½¸ø4(€€€€ð½‘¥Øø4(€€¤ì4)ô4(4)™Õ¹Ñ¥½¸1½¥¹I•ÅÕ¥É•¡ìÑ¥Ñ±”°½¹á¥ÐôèìÑ¥Ñ±”èÍÑÉ¥¹œì½¹á¥Ðè€ ¤€ôøÙ½¥ô¤ì4(€É•ÑÕÉ¸€ñÍ•Ñ¥½¸±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µ±…å½ÕÐˆøñ‘¥Ø±…ÍÍ9…µ”ô‰Ý½É­ÍÁ…”µµ…¥¸±…ÍÌˆøñ‘¥Ø±…ÍÍ9…µ”ô‰Ý•±½µ”ˆøñ¥µœÍÉŒôˆ½…ÁÀµ¥½¸¹Á¹œˆ…±Ðô‰…ÉÍ¥$ˆ€¼øñ ÄùíÑ¥Ñ±•ôƒfn3bŸbËffb¼ƒf#bÇf#b¼ƒbŸbÏb¨ð½ ÄøñÀûb£bÇbŸn0ƒb¿bÏb«bÇbÏn0ƒb£fAƒf ƒbŸb³bÇbŸn0ƒb¿bÏb«f#bÇb0ƒbŸb£b«b¿bœƒb£bœƒb·bÏbŸb …ÉÍ¥$ƒf#bŸbÇb¼ƒbÓf ¸ð½Àøñ‰ÕÑÑ½¸±…ÍÍ9…µ”ô‰ÁÉ¥µ…Éäˆ½¹±¥¬õí½¹á¥ÑôûbÇfb«fƒb£fƒb×fb·fƒf#bÇf#b¼ð½‰ÕÑÑ½¸øð½‘¥Øøð½‘¥Øøð½Í•Ñ¥½¸øì4)ô4(4)™Õ¹Ñ¥½¸9…Ù	ÕÑÑ½¸¡ì…Ñ¥Ù”°±…‰•°°…ÁÑ¥½¸°½¹±¥¬ôèì…Ñ¥Ù”è‰½½±•…¸ì±…‰•°èÍÑÉ¥¹œì…ÁÑ¥½¸èÍÑÉ¥¹œì½¹±¥¬è€ ¤€ôøÙ½¥ô¤ì4(€É•ÑÕÉ¸€ñ‰ÕÑÑ½¸±…ÍÍ9…µ”õí…Ñ¥Ù”€ü€¹…Øµ‰ÕÑÑ½¸…Ñ¥Ù”œ€è€¹…Øµ‰ÕÑÑ½¸ô½¹±¥¬õí½¹±¥­ôøñÍÑÉ½¹œùí±…‰•±ôð½ÍÑÉ½¹œøñÍÁ…¸ùí…ÁÑ¥½¹ôð½ÍÁ…¸øð½‰ÕÑÑ½¸øì4)ô4(4)™Õ¹Ñ¥½¸%¹™¼¡ì±…‰•°°Ù…±Õ”ôèì±…‰•°èÍÑÉ¥¹œìÙ…±Õ”èÍÑÉ¥¹œô¤ì4(€É•ÑÕÉ¸€ñ‘¥Ø±…ÍÍ9…µ”ô‰¥¹™¼µÉ½ÜˆøñÍÁ…¸ùí±…‰•±ôð½ÍÁ…¸øñÍÑÉ½¹œùíÙ…±Õ•ôð½ÍÑÉ½¹œøð½‘¥Øøì4)ô4(4)™Õ¹Ñ¥½¸•…ÑÕÉ”¡ìÑ¥Ñ±”°Ù…±Õ”°É•…‘ä€ô™…±Í”ôèìÑ¥Ñ±”èÍÑÉ¥¹œìÙ…±Õ”èÍÑÉ¥¹œìÉ•…‘äüè‰½½±•…¸ô¤ì4(€É•ÑÕÉ¸€ñ‘¥Ø±…ÍÍ9…µ”õíÉ•…‘ä€ü€™•…ÑÕÉ”µ…ÉÉ•…‘äœ€è€™•…ÑÕÉ”µ…ÉôøñÍÑÉ½¹œùíÑ¥Ñ±•ôð½ÍÑÉ½¹œøñÍÁ…¸ùíÙ…±Õ•ôð½ÍÁ…¸øð½‘¥Øøì4)ô4(

@@ -1,8 +1,36 @@
 .composer-v046 {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  padding: 9px 10px 8px;
+  border-radius: 27px;
+  border-color: rgba(255,255,255,.11);
+  background: linear-gradient(155deg,rgba(28,31,30,.98),rgba(17,20,19,.98));
+  box-shadow: inset 0 1px rgba(255,255,255,.045),0 24px 70px rgba(0,0,0,.36),0 0 0 1px rgba(0,0,0,.18);
+  backdrop-filter: blur(24px);
 }
+
+.composer-v046:focus-within { border-color:rgba(91,224,173,.3); box-shadow:inset 0 1px rgba(255,255,255,.05),0 0 0 3px rgba(73,215,160,.045),0 26px 75px rgba(0,0,0,.4); }
+
+.composer-prompt-shell { position:relative; padding:2px 5px 0; }
+.composer-prompt-shell textarea { min-height:66px; max-height:190px; padding:9px 8px 12px; resize:none; font-size:13px; line-height:1.75; letter-spacing:-.05px; }
+.composer-prompt-shell textarea::placeholder { color:#697a73; }
+
+.composer-v046 .composer-footer { min-height:43px; gap:10px; direction:rtl; }
+.composer-v046 .composer-tools { gap:5px; padding:2px; }
+.composer-v046 .composer-tool { height:36px; padding:0 10px; border-radius:12px; border-color:transparent; background:transparent; color:#aeb8b2; transition:background .16s ease,color .16s ease,transform .16s ease; }
+.composer-v046 .composer-tool:hover { transform:translateY(-1px); color:#eaf5ef; border-color:rgba(255,255,255,.07); background:rgba(255,255,255,.055); }
+.composer-v046 .composer-tool.selected { color:#8ff1ce; border-color:rgba(73,215,160,.18); background:rgba(73,215,160,.09); }
+.composer-v046 .composer-tool-main { width:38px; padding:0; justify-content:center; border-radius:50%; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.045); }
+.composer-v046 .composer-tool-main span { display:none; }
+.composer-v046 .composer-tool b { min-width:14px; color:inherit; font-size:15px; font-weight:500; }
+.composer-v046 .composer-tool span { color:inherit; font-size:9px; }
+.composer-actions { display:flex; align-items:center; gap:8px; direction:ltr; }
+.composer-v046 .composer-model { margin:0; padding:0 4px; color:#819087 !important; white-space:nowrap; }
+.composer-send { width:39px; height:39px; display:grid; place-items:center; border:0; border-radius:50%; color:#092018; background:linear-gradient(145deg,#e9fff7,#83e8c2); box-shadow:inset 0 1px rgba(255,255,255,.65),0 9px 24px rgba(73,215,160,.2); font-size:20px; font-weight:800; transition:transform .16s ease,filter .16s ease,opacity .16s ease; }
+.composer-send:hover:not(:disabled) { transform:translateY(-1px) scale(1.04); filter:brightness(1.06); }
+.composer-send:disabled { opacity:.24; box-shadow:none; }
+.composer-send.sending { color:#c8d3ce; background:rgba(255,255,255,.08); font-size:11px; }
 
 .hidden-file-input {
   display: none;
