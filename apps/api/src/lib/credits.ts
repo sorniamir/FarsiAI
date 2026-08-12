@@ -1,10 +1,12 @@
 import type { Env } from '../types';
+import { getAccountAccess } from './account-access';
 import { supabaseAdminFetch } from './supabase-admin';
 
 export type DailyQuota = {
   chatRemaining: number;
   imageRemaining: number;
   resetsAt?: string;
+  unlimited?: boolean;
 };
 
 export type SpendResult =
@@ -95,6 +97,7 @@ function parseQuota(payload: unknown): DailyQuota | null {
     chatRemaining: Math.max(0, chatRemaining),
     imageRemaining: Math.max(0, imageRemaining),
     resetsAt: typeof value.resetsAt === 'string' ? value.resetsAt : undefined,
+    unlimited: value.unlimited === true || undefined,
   };
 }
 
@@ -166,6 +169,18 @@ export async function spendDailyQuota(
   mode: 'chat' | 'image',
   referenceId: string,
 ): Promise<SpendResult> {
+  const access = await getAccountAccess(env, userId);
+  if (access.unlimited) {
+    return {
+      ok: true,
+      quota: {
+        chatRemaining: 999_999,
+        imageRemaining: 999_999,
+        unlimited: true,
+      },
+    };
+  }
+
   return callQuotaRpc(env, 'rpc/use_daily_quota', {
     p_user_id: userId,
     p_mode: mode,
