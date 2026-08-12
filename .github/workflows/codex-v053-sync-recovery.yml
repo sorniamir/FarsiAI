@@ -1,0 +1,43 @@
+name: Codex v0.5.3 Recovery Sync
+
+on:
+  push:
+    branches: ["codex-v051-recovery"]
+    paths:
+      - ".github/workflows/codex-v053-sync-recovery.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout recovery branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync tested Codex v2 source from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git show origin/main:apps/api/src/ai/codex-v2.ts > apps/api/src/ai/codex-v2.ts
+          git show origin/main:apps/api/test/codex-v2.test.ts > apps/api/test/codex-v2.test.ts
+
+      - name: Validate recovery backend
+        run: |
+          npm install
+          npm run check:api
+          npm run test:api
+
+      - name: Commit synced recovery backend
+        shell: bash
+        run: |
+          git config user.name "FarsiAI Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/api/src/ai/codex-v2.ts apps/api/test/codex-v2.test.ts
+          git diff --cached --check
+          git commit -m "fix(codex): sync v0.5.3 planner repair to recovery" || exit 0
+          git push origin HEAD:codex-v051-recovery
