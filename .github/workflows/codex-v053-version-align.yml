@@ -1,0 +1,52 @@
+name: Codex v0.5.3 Version Align
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/codex-v053-version-align.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Align v0.5.3 versions
+        shell: bash
+        run: |
+          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKZGVmIHJlcGxhY2UocGF0aCwgb2xkLCBuZXcsIGNvdW50PTEpOgogICAgcCA9IFBhdGgocGF0aCkKICAgIHRleHQgPSBwLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQogICAgYXNzZXJ0IG9sZCBpbiB0ZXh0LCBmIm1pc3NpbmcgdmVyc2lvbiB0YXJnZXQgaW4ge3BhdGh9OiB7b2xkfSIKICAgIHRleHQgPSB0ZXh0LnJlcGxhY2Uob2xkLCBuZXcsIGNvdW50KQogICAgcC53cml0ZV90ZXh0KHRleHQsIGVuY29kaW5nPSJ1dGYtOCIpCgpyZXBsYWNlKCJwYWNrYWdlLmpzb24iLCAnInZlcnNpb24iOiAiMC41LjEiJywgJyJ2ZXJzaW9uIjogIjAuNS4zIicpCnJlcGxhY2UoImFwcHMvYXBpL3BhY2thZ2UuanNvbiIsICcidmVyc2lvbiI6ICIwLjUuMSInLCAnInZlcnNpb24iOiAiMC41LjMiJykKcmVwbGFjZSgiYXBwcy9kZXNrdG9wL3BhY2thZ2UuanNvbiIsICcidmVyc2lvbiI6ICIwLjUuMiInLCAnInZlcnNpb24iOiAiMC41LjMiJykKcmVwbGFjZSgiYXBwcy9kZXNrdG9wL3NyYy10YXVyaS90YXVyaS5jb25mLmpzb24iLCAnInZlcnNpb24iOiAiMC41LjIiJywgJyJ2ZXJzaW9uIjogIjAuNS4zIicpCnJlcGxhY2UoImFwcHMvZGVza3RvcC9zcmMtdGF1cmkvQ2FyZ28udG9tbCIsICd2ZXJzaW9uID0gIjAuNS4yIicsICd2ZXJzaW9uID0gIjAuNS4zIicpCnJlcGxhY2UoImFwcHMvZGVza3RvcC9zcmMvc2VydmljZXMvY29kZXgudHMiLCAiZXhwb3J0IGNvbnN0IENPREVYX0NMSUVOVF9WRVJTSU9OID0gJzAuNS4yLWNvZGV4LXN0dWRpbyc7IiwgImV4cG9ydCBjb25zdCBDT0RFWF9DTElFTlRfVkVSU0lPTiA9ICcwLjUuMy1jb2RleC1zdHVkaW8nOyIpCnJlcGxhY2UoImFwcHMvYXBpL3NyYy9pbmRleC50cyIsICJ2ZXJzaW9uOiAnMC40LjgnIiwgInZlcnNpb246ICcwLjUuMyciKQpyZXBsYWNlKCJhcHBzL2FwaS90ZXN0L2luZGV4LnRlc3QudHMiLCAidmVyc2lvbjogJzAuNC44JyIsICJ2ZXJzaW9uOiAnMC41LjMnIikKcmVwbGFjZSgiYXBwcy9hcGkvdGVzdC9jb2RleC12Mi50ZXN0LnRzIiwgImNsaWVudDogeyBraW5kOiAnZGVza3RvcCcsIHZlcnNpb246ICcwLjUuMScsIGxvY2FsZTogJ2ZhLUlSJyB9IiwgImNsaWVudDogeyBraW5kOiAnZGVza3RvcCcsIHZlcnNpb246ICcwLjUuMycsIGxvY2FsZTogJ2ZhLUlSJyB9IikK' | base64 -d > /tmp/align_versions.py
+          python /tmp/align_versions.py
+          npm install --package-lock-only
+          cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Verify aligned source
+        run: |
+          npm install
+          npm run check:api
+          npm run check:desktop
+          npm run test:api
+
+      - name: Commit and push version alignment
+        shell: bash
+        run: |
+          git config user.name "FarsiAI Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add package.json package-lock.json apps/api/package.json apps/api/src/index.ts apps/api/test/index.test.ts apps/api/test/codex-v2.test.ts apps/desktop/package.json apps/desktop/src/services/codex.ts apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
+          git diff --cached --check
+          git commit -m "chore: align FarsiAI v0.5.3 versions" || exit 0
+          git push origin HEAD:main
