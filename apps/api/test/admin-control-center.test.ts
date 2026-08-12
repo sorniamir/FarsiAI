@@ -130,3 +130,56 @@ test('a banned account is stopped before Codex planning executes', async () => {
     globalThis.fetch = original;
   }
 });
+
+
+test('a banned account is stopped on the legacy Codex planner too', async () => {
+  const original = globalThis.fetch;
+  let aiCalls = 0;
+  const env = baseEnv();
+  env.AI = { run: async () => { aiCalls += 1; return {}; } };
+  globalThis.fetch = async () => Response.json({
+    id: '11111111-1111-4111-8111-111111111111',
+    email: 'member@example.com',
+    app_metadata: { farsiai_banned: true },
+  });
+  try {
+    const response = await worker.fetch(new Request('https://api.example/v1/agent/plan', {
+      method: 'POST',
+      headers: { authorization: 'Bearer user-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ task: 'فایل را بررسی کن', clientCapabilities: { tools: [] } }),
+    }), env);
+    assert.equal(response.status, 403);
+    const payload = await response.json() as { code?: string };
+    assert.equal(payload.code, 'CODEX_ACCOUNT_BANNED');
+    assert.equal(aiCalls, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('non-bootstrap admins cannot mutate the bootstrap owner account', async () => {
+  const original = globalThis.fetch;
+  const actorId = '11111111-1111-4111-8111-111111111111';
+  const ownerId = '22222222-2222-4222-8222-222222222222';
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) return Response.json({ id: actorId, email: 'staff-admin@example.com', app_metadata: {} });
+    if (url.includes('/rest/v1/profiles?select=plan') && url.includes(actorId)) return Response.json([{ plan: 'admin' }]);
+    if (url.includes('/auth/v1/admin/users/' + ownerId)) return Response.json({ id: ownerId, email: 'owner@example.com', app_metadata: {} });
+    throw new Error('Unexpected fetch in owner protection test: ' + url);
+  };
+  try {
+    const env = baseEnv();
+    env.ADMIN_EMAILS = 'owner@example.com';
+    const response = await handleAdminRequest(new Request('https://api.example/v1/admin/users/' + ownerId + '/ban', {
+      method: 'POST',
+      headers: { authorization: 'Bearer admin-token', 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'should be blocked' }),
+    }), env);
+    assert.equal(response.status, 403);
+    const payload = await response.json() as { error?: string };
+    assert.match(payload.error || '', /Owner/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

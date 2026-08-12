@@ -559,6 +559,7 @@ export async function handleAgentPlan(request: Request, env: Env): Promise<Respo
     const auth = await resolveAuth(request, env);
     if (auth.kind === 'invalid') return json(env, { ok: false, error: 'نشست کاربری معتبر نیست. دوباره وارد حساب شوید.', code: 'CODEX_AUTH_INVALID', requestId }, 401);
     if (auth.kind !== 'user') return json(env, { ok: false, error: 'Codex فقط برای کاربران واردشده فعال است.', code: 'CODEX_LOGIN_REQUIRED', requestId }, 401);
+    if (auth.user.banned) return json(env, { ok: false, error: 'این حساب توسط مدیریت FarsiAI مسدود شده است.', code: 'CODEX_ACCOUNT_BANNED', requestId }, 403);
 
     const { success } = await env.API_RATE_LIMITER.limit({ key: `user:${auth.user.id}:agent` });
     if (!success) {
