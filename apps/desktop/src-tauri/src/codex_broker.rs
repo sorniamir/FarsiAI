@@ -2299,7 +2299,10 @@ mod tests {
             verify_expected_hash(Some(original), Some(&actual)).expect("matching hash"),
             Some(actual)
         );
-        assert!(verify_expected_hash(Some(original), None).is_err());
+        assert_eq!(
+            verify_expected_hash(Some(original), None).expect("derive current hash"),
+            Some(sha256_bytes(original))
+        );
         assert!(verify_expected_hash(Some(original), Some(&"0".repeat(64))).is_err());
         assert!(verify_expected_hash(None, Some(&sha256_bytes(b"missing"))).is_err());
         assert_eq!(verify_expected_hash(None, None).expect("new file"), None);
