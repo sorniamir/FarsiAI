@@ -1,0 +1,178 @@
+name: Codex v0.5.3 Repair Patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/codex-v053-repair-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply Codex planner repair patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('apps/api/src/ai/codex-v2.ts')
+          source = source_path.read_text(encoding='utf-8')
+
+          old = "if (!path || path === '.' || typeof input.content !== 'string' || !input.content || input.content.length > 5_000_000) return null;"
+          new = "if (!path || path === '.' || typeof input.content !== 'string' || input.content.length > 5_000_000) return null;"
+          assert old in source, 'empty-content validation target missing'
+          source = source.replace(old, new, 1)
+
+          old = "    'Choose only one tool per turn. Inspect before editing. write_file replaces the complete file, so preserve unrelated content.',"
+          new = "    'Choose only one tool per turn. Inspect before editing. write_file replaces the complete file, so preserve unrelated content. Creating an empty UTF-8 file is valid: use write_file with content set to an empty string.',"
+          assert old in source, 'system prompt edit target missing'
+          source = source.replace(old, new, 1)
+
+          old = "    'After edits, run the most relevant validation when the terminal plugin is enabled. Do not repeat a failed side effect automatically.',"
+          new = "    'After edits, run the most relevant validation when the terminal plugin is enabled. Do not repeat a failed side effect automatically. Do not repeat an already verified successful side effect unless a later verified observation proves another change is required.',"
+          assert old in source, 'system prompt repeat target missing'
+          source = source.replace(old, new, 1)
+
+          old = '''    const requireTool = observations.length === 0;
+    const planner = await runModel(env, { messages, tools, tool_choice: requireTool ? 'required' : 'auto', parallel_tool_calls: false, temperature: 0.1, max_completion_tokens: 2600 }, requireTool);
+    const rawCall = toolCallCandidate(planner.result);
+    if (rawCall) {
+      const tool = normalizeToolCall(rawCall, offered, capabilities.appIds, requestId);
+      if (!tool) return json(env, { ok: false, error: 'مدل یک ابزار نامعتبر یا خارج از مجوز پیشنهاد داد.', code: 'CODEX_INVALID_TOOL', requestId, model: planner.model }, 502);
+      return json(env, { ok: true, type: 'tool', tool, requestId, model: planner.model });
+    }
+    const message = responseText(planner.result);
+    if (!message) throw new Error('Codex returned no usable result.');
+    const unresolved = observations.some((item) => item.status !== 'success');
+    return json(env, { ok: true, type: 'final', message: unresolved ? `اجرای کامل تأیید نشد. ${message}` : message, requestId, model: planner.model });'''
+
+          new = '''    const requireTool = observations.length === 0;
+    const plannerBase = { messages, tools, tool_choice: requireTool ? 'required' : 'auto', parallel_tool_calls: false, temperature: 0.1, max_completion_tokens: 2600 };
+    let planner = await runModel(env, plannerBase, requireTool);
+    for (let repairAttempt = 0; repairAttempt <= 2; repairAttempt += 1) {
+      const rawCall = toolCallCandidate(planner.result);
+      if (rawCall) {
+        const tool = normalizeToolCall(rawCall, offered, capabilities.appIds, requestId);
+        if (tool) return json(env, { ok: true, type: 'tool', tool, requestId, model: planner.model });
+        if (repairAttempt < 2) {
+          console.warn(JSON.stringify({ event: 'codex_v2_invalid_tool_repair', requestId, model: planner.model, repairAttempt: repairAttempt + 1 }));
+          const repairMessages = [...messages, {
+            role: 'user' as const,
+            content: [
+              'PLANNER VALIDATION ERROR: your previous tool proposal was rejected before local execution.',
+              `Use exactly one of these enabled tools: ${capabilities.tools.map((item) => item.name).join(', ')}.`,
+              'Use only relative workspace paths and the exact JSON schema supplied for that tool.',
+              'For write_file, content MUST be a string and MAY be an empty string when the user asks to create an empty file.',
+              'Do not invent aliases such as create_file, save_file, shell, terminal, mkdir, list_files or edit_file.',
+              requireTool ? 'Return exactly one valid tool call now.' : 'Return either one valid tool call or a final answer if the task is already complete.',
+            ].join('\\n'),
+          }];
+          planner = await runModel(env, { ...plannerBase, messages: repairMessages }, requireTool);
+          continue;
+        }
+        return json(env, {
+          ok: false,
+          error: 'Codex نتوانست بعد از اصلاح خودکار یک ابزار معتبر برای این مرحله انتخاب کند؛ هیچ عملیات محلی اجرا نشد.',
+          code: 'CODEX_INVALID_TOOL',
+          requestId,
+          model: planner.model,
+        }, 502);
+      }
+      const message = responseText(planner.result);
+      if (!message) throw new Error('Codex returned no usable result.');
+      const unresolved = observations.some((item) => item.status !== 'success');
+      return json(env, { ok: true, type: 'final', message: unresolved ? `اجرای کامل تأیید نشد. ${message}` : message, requestId, model: planner.model });
+    }
+    throw new Error('Codex repair loop ended unexpectedly.');'''
+          assert old in source, 'planner block target missing'
+          source = source.replace(old, new, 1)
+          source_path.write_text(source, encoding='utf-8')
+
+          test_path = Path('apps/api/test/codex-v2.test.ts')
+          tests = test_path.read_text(encoding='utf-8')
+          marker = '\n});\n'
+          pos = tests.rfind(marker)
+          assert pos != -1, 'test suite closing marker missing'
+          addition = r'''
+
+  it('accepts an empty write_file payload when the task is to create an empty file', async () => {
+    authenticate();
+    const payload: any = body();
+    payload.task = 'یک فایل document.txt خالی بساز';
+    payload.client.version = '0.5.3';
+    payload.capabilities.tools = [{ name: 'write_file', permission: 'ask' }];
+    const aiRun = mock.fn(async () => ({
+      output: [{
+        type: 'function_call',
+        call_id: 'fc-create-empty',
+        name: 'write_file',
+        arguments: '{"path":"document.txt","content":""}',
+      }],
+    }));
+
+    const response = await handleCodexTurn(request(payload), envWith(aiRun));
+    assert.equal(response.status, 200);
+    const result = await response.json() as any;
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'tool');
+    assert.equal(result.tool.name, 'write_file');
+    assert.equal(result.tool.arguments.path, 'document.txt');
+    assert.equal(result.tool.arguments.content, '');
+    assert.equal(aiRun.mock.callCount(), 1);
+  });
+
+  it('repairs an invalid model tool proposal before returning anything to the desktop', async () => {
+    authenticate();
+    const payload: any = body();
+    payload.task = 'یک فایل متنی با نام FarsiAI بساز';
+    payload.client.version = '0.5.3';
+    payload.capabilities.tools = [{ name: 'write_file', permission: 'ask' }];
+    let calls = 0;
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      calls += 1;
+      if (calls == 1) {
+        return { output: [{ type: 'function_call', call_id: 'bad-create', name: 'create_file', arguments: '{"path":"FarsiAI.txt"}' }] };
+      }
+      assert.match(input.messages.at(-1).content, /PLANNER VALIDATION ERROR/);
+      return { output: [{ type: 'function_call', call_id: 'fixed-write', name: 'write_file', arguments: '{"path":"FarsiAI.txt","content":""}' }] };
+    });
+
+    const response = await handleCodexTurn(request(payload), envWith(aiRun));
+    assert.equal(response.status, 200);
+    const result = await response.json() as any;
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'tool');
+    assert.equal(result.tool.name, 'write_file');
+    assert.equal(result.tool.arguments.path, 'FarsiAI.txt');
+    assert.equal(result.tool.arguments.content, '');
+    assert.equal(calls, 2);
+  });
+'''
+          tests = tests[:pos] + addition + tests[pos:]
+          test_path.write_text(tests, encoding='utf-8')
+          PY
+
+      - name: Validate patch locally
+        run: |
+          npm install
+          npm run check:api
+          npm run test:api
+
+      - name: Commit and push source changes
+        shell: bash
+        run: |
+          git config user.name "FarsiAI Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add apps/api/src/ai/codex-v2.ts apps/api/test/codex-v2.test.ts
+          git diff --cached --check
+          git commit -m "fix(codex): repair invalid tool proposals" || exit 0
+          git push origin HEAD:main
