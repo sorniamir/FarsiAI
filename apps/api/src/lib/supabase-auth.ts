@@ -3,6 +3,9 @@ import type { Env } from '../types';
 export type VerifiedUser = {
   id: string;
   email?: string;
+  banned?: boolean;
+  bannedUntil?: string;
+  appMetadata?: Record<string, unknown>;
 };
 
 export type AuthResult =
@@ -16,6 +19,12 @@ function bearerToken(request: Request): string | null {
   if (!value) return null;
   const match = /^Bearer\s+(.+)$/i.exec(value);
   return match?.[1]?.trim() || null;
+}
+
+function isFuture(value: unknown): value is string {
+  if (typeof value !== 'string' || !value) return false;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && time > Date.now();
 }
 
 export async function resolveAuth(request: Request, env: Env): Promise<AuthResult> {
@@ -36,14 +45,28 @@ export async function resolveAuth(request: Request, env: Env): Promise<AuthResul
 
   if (!response.ok) return { kind: 'invalid' };
 
-  const payload = (await response.json()) as { id?: unknown; email?: unknown };
+  const payload = (await response.json()) as {
+    id?: unknown;
+    email?: unknown;
+    banned_until?: unknown;
+    app_metadata?: unknown;
+  };
   if (typeof payload.id !== 'string' || !payload.id) return { kind: 'invalid' };
+
+  const appMetadata = payload.app_metadata && typeof payload.app_metadata === 'object' && !Array.isArray(payload.app_metadata)
+    ? payload.app_metadata as Record<string, unknown>
+    : {};
+  const bannedUntil = isFuture(payload.banned_until) ? payload.banned_until : undefined;
+  const banned = appMetadata.farsiai_banned === true || !!bannedUntil;
 
   return {
     kind: 'user',
     user: {
       id: payload.id,
       email: typeof payload.email === 'string' ? payload.email : undefined,
+      banned,
+      bannedUntil,
+      appMetadata,
     },
   };
 }
