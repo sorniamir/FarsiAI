@@ -29,7 +29,7 @@ function body(observations: unknown[] = []) {
     task: 'فایل package.json را بررسی کن و فقط در صورت نیاز قدم بعدی را پیشنهاد بده.',
     workspace: { boundary: 'approved-workspace', label: 'Codex v2 test workspace' },
     observations,
-    client: { kind: 'desktop', version: '0.5.0', locale: 'fa-IR' },
+    client: { kind: 'desktop', version: '0.5.1', locale: 'fa-IR' },
     capabilities: {
       protocol: 'farsiai.codex.desktop.v2',
       tools: [{ name: 'read_file', permission: 'automatic' }],
@@ -89,13 +89,13 @@ describe('Codex Studio v2 free-plan planner', () => {
     assert.equal(aiRun.mock.callCount(), 1);
   });
 
-  it('falls back to GPT-OSS 20B after both primary compatibility attempts fail', async () => {
+  it('falls back to live-tested Gemma after both primary compatibility attempts fail', async () => {
     authenticate();
     let calls = 0;
     const aiRun = mock.fn(async (model: string) => {
       calls += 1;
       if (model === '@cf/openai/gpt-oss-120b') throw new Error('temporary primary outage');
-      assert.equal(model, '@cf/openai/gpt-oss-20b');
+      assert.equal(model, '@cf/google/gemma-4-26b-a4b-it');
       return { tool_calls: [{ id: 'fallback-call', name: 'read_file', arguments: { path: 'package.json' } }] };
     });
 
@@ -104,9 +104,9 @@ describe('Codex Studio v2 free-plan planner', () => {
     const payload = await response.json() as any;
     assert.equal(payload.ok, true);
     assert.equal(payload.type, 'tool');
-    assert.equal(payload.model, '@cf/openai/gpt-oss-20b');
+    assert.equal(payload.model, '@cf/google/gemma-4-26b-a4b-it');
     assert.equal(payload.tool.name, 'read_file');
-    assert.equal(calls, 3, 'primary should receive standard + compatibility attempts before fallback');
+    assert.equal(calls, 3, 'primary should receive standard + compatibility attempts before the verified fallback');
   });
 
   it('parses a Responses API final message after verified local evidence', async () => {
