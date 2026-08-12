@@ -8,9 +8,12 @@ on:
       - "apps/api/src/ai/agent.ts"
       - "apps/api/src/ai/agent-v2.ts"
       - "apps/api/src/ai/codex-v2.ts"
+      - "apps/api/src/ai/voice.ts"
       - "apps/api/src/index.ts"
       - "apps/api/test/**"
+      - "apps/api/package.json"
       - "package.json"
+      - "package-lock.json"
       - ".github/workflows/desktop-windows.yml"
   pull_request:
     branches: [main]
@@ -19,9 +22,12 @@ on:
       - "apps/api/src/ai/agent.ts"
       - "apps/api/src/ai/agent-v2.ts"
       - "apps/api/src/ai/codex-v2.ts"
+      - "apps/api/src/ai/voice.ts"
       - "apps/api/src/index.ts"
       - "apps/api/test/**"
+      - "apps/api/package.json"
       - "package.json"
+      - "package-lock.json"
       - ".github/workflows/desktop-windows.yml"
   workflow_dispatch:
 
@@ -47,10 +53,30 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Typecheck desktop
+      - name: Typecheck API
+        run: npm run check:api
+
+      - name: Typecheck Desktop
         run: npm run check:desktop
 
-      - name: Test Codex planner regressions
+      - name: Verify Codex v2 production model contract
+        shell: pwsh
+        run: |
+          $source = Get-Content "apps/api/src/ai/codex-v2.ts" -Raw
+          if ($source -notmatch [regex]::Escape("@cf/openai/gpt-oss-120b")) {
+            throw "Live-tested GPT-OSS 120B primary model is missing."
+          }
+          if ($source -notmatch [regex]::Escape("@cf/google/gemma-4-26b-a4b-it")) {
+            throw "Live-tested Gemma fallback model is missing."
+          }
+          foreach ($blocked in @("@cf/moonshotai/kimi-k2.7-code", "@cf/zai-org/glm-5.2", "@cf/openai/gpt-oss-20b", "@cf/zai-org/glm-4.7-flash")) {
+            if ($source -match [regex]::Escape($blocked)) {
+              throw "Unverified or unavailable Codex model remained in v2: $blocked"
+            }
+          }
+          Write-Host "Verified Codex v2 uses only the live-tested Workers Free model set."
+
+      - name: Test Codex planner regressions including v2
         run: npm run test:api
 
       - name: Test Codex desktop path contract
@@ -61,6 +87,9 @@ jobs:
 
       - name: Build desktop frontend for Tauri tests
         run: npm --workspace apps/desktop run build
+
+      - name: Test native Codex production transport
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml native_transport_reaches_the_live_codex_route -- --nocapture
 
       - name: Test all Codex local operations on Windows
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -- --nocapture
@@ -85,12 +114,15 @@ jobs:
           if ($joined -notmatch "farsiai.codex.desktop.v2") {
             throw "Codex Studio v2 marker was not embedded into the Windows production bundle."
           }
-          Write-Host "Verified production API + Supabase + Codex Pro client configuration in desktop bundle."
+          if ($joined -notmatch "0.5.1-codex-studio") {
+            throw "Codex Studio v0.5.1 client marker was not embedded into the Windows production bundle."
+          }
+          Write-Host "Verified production API + Supabase + Codex v0.5.1 configuration in desktop bundle."
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: FarsiAI-Desktop-Windows-v0.5.0-Codex-Voice
+          name: FarsiAI-Desktop-Windows-v0.5.1-Codex-Verified
           if-no-files-found: error
           path: |
             apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
