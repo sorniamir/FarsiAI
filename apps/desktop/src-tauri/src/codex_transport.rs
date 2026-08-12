@@ -61,3 +61,16 @@ pub async fn codex_api_turn(
         .map_err(|_| "CODEX_NATIVE_RESPONSE_NOT_UTF8".to_string())?;
     Ok(CodexHttpResponse { status, body })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_transport_reaches_the_live_codex_route() {
+        let response = tauri::async_runtime::block_on(codex_api_turn("{}".to_string(), None))
+            .expect("native Codex transport must reach the production API");
+        assert_eq!(response.status, 401);
+        assert!(response.body.contains("CODEX_LOGIN_REQUIRED"));
+    }
+}

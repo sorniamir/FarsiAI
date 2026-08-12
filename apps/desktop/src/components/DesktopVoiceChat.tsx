@@ -280,7 +280,7 @@ export function DesktopVoiceChat({ ask, remaining }: { ask: (text: string) => Pr
   return (
     <section className="desktop-voice-layout">
       <div className="desktop-voice-main glass">
-        <div className="voice-heading"><div><h2>Voice Chat Live</h2><p>فارسی صحبت کن؛ AI با صدای طبیعی فارسی پاسخ می‌دهد و در حالت پیوسته دوباره منتظر سؤال بعدی می‌ماند.</p></div><span>{remaining} پیام باقی‌مانده</span></div>
+        <div className="voice-heading"><div><div className="voice-eyebrow"><i /> FARSI VOICE · REALTIME</div><h2>گفت‌وگوی زنده با هوش مصنوعی</h2><p>طبیعی فارسی صحبت کن؛ پاسخ را هم‌زمان با صدای فارسی بشنو و مکالمه را بدون لمس اضافه ادامه بده.</p></div><span>{remaining} پیام باقی‌مانده</span></div>
         <div className="voice-continuous-control">
           <button className={continuous ? 'secondary selected' : 'secondary'} onClick={() => setContinuous((value) => !value)} aria-pressed={continuous}>
             {continuous ? '● مکالمه پیوسته روشن' : '○ مکالمه پیوسته خاموش'}
@@ -297,6 +297,7 @@ export function DesktopVoiceChat({ ask, remaining }: { ask: (text: string) => Pr
             >{status === 'thinking' || status === 'transcribing' || status === 'synthesizing' ? '…' : busy ? '■' : '●'}</button>
           </div>
           <strong>{labels[status]}</strong>
+          <div className={`voice-spectrum ${busy ? 'active' : ''}`} aria-hidden="true">{[0, 1, 2, 3, 4, 5, 6].map((bar) => <i key={bar} style={{ animationDelay: `${bar * 90}ms` }} />)}</div>
           <small>{status === 'listening' ? 'صحبتت که تمام شد، حلقه را دوباره لمس کن تا ارسال شود' : busy ? 'برای توقف فوری حلقه را لمس کن' : 'حلقه را لمس کن و طبیعی صحبت کن'}</small>
           {partial ? <div className="desktop-live-transcript"><b>{status === 'listening' ? 'REC' : 'LIVE'}</b><span>{partial}</span></div> : null}
           {error ? <div className="desktop-voice-error">{error}</div> : null}
