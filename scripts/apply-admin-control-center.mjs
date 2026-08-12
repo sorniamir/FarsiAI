@@ -16,7 +16,7 @@ replaceOnce(
 replaceOnce(
   'apps/api/src/index.ts',
   "    if (request.method === 'GET' && url.pathname === '/health') {\n      return json(env, { ok: true, service: 'farsiai-api', version: '0.5.3' });\n    }\n",
-  "    if (request.method === 'GET' && (url.pathname === '/admin' || url.pathname === '/admin/')) {\n      return renderAdminPanel(env);\n    }\n\n    if (url.pathname.startsWith('/v1/admin/')) {\n      return handleAdminRequest(request, env);\n    }\n\n    if (request.method === 'GET' && url.pathname === '/health') {\n      return json(env, { ok: true, service: 'farsiai-api', version: '0.5.3', admin: true });\n    }\n",
+  "    if (request.method === 'GET' && (url.pathname === '/admin' || url.pathname === '/admin/')) {\n      return renderAdminPanel(env);\n    }\n\n    if (url.pathname.startsWith('/v1/admin/')) {\n      return handleAdminRequest(request, env);\n    }\n\n    if (request.method === 'GET' && url.pathname === '/health') {\n      return json(env, { ok: true, service: 'farsiai-api', version: '0.5.3' });\n    }\n",
 );
 
 replaceOnce(
