@@ -3,6 +3,7 @@ import type { Env } from '../types';
 import { translate } from './translate';
 
 const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+const IMAGE_FALLBACK_MODEL = '@cf/bytedance/stable-diffusion-xl-lightning';
 const IMAGE_EDIT_MODEL = '@cf/runwayml/stable-diffusion-v1-5-img2img';
 const DEFAULT_NANO_BANANA_MODEL = 'gemini-3.1-flash-image';
 const MAX_PROVIDER_PROMPT = 1900;
@@ -38,7 +39,7 @@ function imagePrompt(prompt: string, referencePrompt?: string): string {
 }
 
 function normalizeProviderImage(data: unknown, mimeType: unknown): { data: string; mimeType: string } | null {
-  const clean = typeof data === 'string' ? data.trim() : '';
+  const clean = typeof data === 'string' ? data.replace(/\s+/g, '').trim() : '';
   if (!clean || clean.length > MAX_PROVIDER_IMAGE_BASE64 || !/^[A-Za-z0-9+/=]+$/.test(clean)) return null;
   const mime = typeof mimeType === 'string' ? mimeType.toLowerCase() : 'image/png';
   if (!/^image\/(?:png|jpe?g|webp)$/.test(mime)) return null;
@@ -49,6 +50,16 @@ function extractGeminiImage(payload: any): { data: string; mimeType: string } | 
   const direct = payload?.output_image ?? payload?.outputImage;
   const normalizedDirect = normalizeProviderImage(direct?.data, direct?.mime_type ?? direct?.mimeType);
   if (normalizedDirect) return normalizedDirect;
+
+  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    for (const part of parts) {
+      const inline = part?.inlineData ?? part?.inline_data;
+      const normalized = normalizeProviderImage(inline?.data, inline?.mimeType ?? inline?.mime_type);
+      if (normalized) return normalized;
+    }
+  }
 
   const output = Array.isArray(payload?.output) ? payload.output : [];
   for (const item of output) {
@@ -69,6 +80,86 @@ function extractGeminiImage(payload: any): { data: string; mimeType: string } | 
   return null;
 }
 
+async function geminiGenerateContent(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  reference: { mimeType: string; base64: string } | undefined,
+  signal: AbortSignal,
+): Promise<{ data: string; mimeType: string } | null> {
+  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+  if (reference) {
+    parts.push({ inlineData: { mimeType: reference.mimeType, data: reference.base64 } });
+  }
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    signal,
+    body: JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: {
+        responseModalities: ['IMAGE'],
+        responseFormat: {
+          image: {
+            aspectRatio: '1:1',
+            imageSize: '1K',
+          },
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = compactPrompt(await response.text(), 500);
+    console.warn(JSON.stringify({ event: 'nano_banana_generate_content_failed', status: response.status, model, detail }));
+    return null;
+  }
+  return extractGeminiImage(await response.json());
+}
+
+async function geminiInteractions(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  reference: { mimeType: string; base64: string } | undefined,
+  signal: AbortSignal,
+): Promise<{ data: string; mimeType: string } | null> {
+  const input: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
+  if (reference) {
+    input.push({ type: 'image', mime_type: reference.mimeType, data: reference.base64 });
+  }
+
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    signal,
+    body: JSON.stringify({
+      model,
+      input,
+      response_format: {
+        type: 'image',
+        mime_type: 'image/png',
+        aspect_ratio: '1:1',
+        image_size: '1K',
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = compactPrompt(await response.text(), 500);
+    console.warn(JSON.stringify({ event: 'nano_banana_interactions_failed', status: response.status, model, detail }));
+    return null;
+  }
+  return extractGeminiImage(await response.json());
+}
+
 async function runNanoBanana(
   env: Env,
   prompt: string,
@@ -79,50 +170,15 @@ async function runNanoBanana(
 
   const model = env.NANO_BANANA_MODEL?.trim() || DEFAULT_NANO_BANANA_MODEL;
   const reference = parseImageDataUrl(referenceImage);
-  const input: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
-  if (reference) {
-    input.push({
-      type: 'image',
-      mime_type: reference.mimeType,
-      data: reference.base64,
-    });
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort('gemini-image-timeout'), GEMINI_TIMEOUT_MS);
   try {
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        input,
-        response_format: {
-          type: 'image',
-          mime_type: 'image/png',
-          aspect_ratio: '1:1',
-          image_size: '1K',
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = compactPrompt(await response.text(), 500);
-      console.warn(JSON.stringify({ event: 'nano_banana_failed', status: response.status, detail }));
-      return null;
-    }
-
-    const payload = await response.json();
-    const image = extractGeminiImage(payload);
+    const image = await geminiGenerateContent(apiKey, model, prompt, reference, controller.signal)
+      ?? await geminiInteractions(apiKey, model, prompt, reference, controller.signal);
     if (!image) {
       console.warn(JSON.stringify({ event: 'nano_banana_empty_or_invalid_image', model }));
       return null;
     }
-
     return {
       image: `data:${image.mimeType};base64,${image.data}`,
       provider: model,
@@ -130,11 +186,26 @@ async function runNanoBanana(
   } catch (error) {
     console.warn(JSON.stringify({
       event: 'nano_banana_exception',
+      model,
       message: error instanceof Error ? error.message : 'unknown_nano_banana_error',
     }));
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function bestEffortWorkersPrompt(env: Env, userPrompt: string): Promise<string> {
+  if (!containsPersian(userPrompt)) return compactPrompt(userPrompt, 1500);
+  try {
+    const translated = await translate(env, userPrompt, 'fa', 'en');
+    return compactPrompt(translated || userPrompt, 1500);
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'image_translation_fallback',
+      message: error instanceof Error ? error.message : 'unknown_translation_error',
+    }));
+    return compactPrompt(userPrompt, 1500);
   }
 }
 
@@ -155,24 +226,24 @@ export async function runImage(
   referenceImage?: string,
   referencePrompt?: string,
 ): Promise<{ image: string; prompt: string; edited: boolean; provider: string }> {
-  const translatedPrompt = containsPersian(userPrompt)
-    ? await translate(env, userPrompt, 'fa', 'en')
-    : userPrompt;
-  const prompt = compactPrompt(translatedPrompt, 1500);
-  if (!prompt) throw new Error('Empty image prompt');
+  const directPrompt = compactPrompt(userPrompt, 1500);
+  if (!directPrompt) throw new Error('Empty image prompt');
 
   const reference = parseImageDataUrl(referenceImage);
-  const finalPrompt = imagePrompt(prompt, reference ? referencePrompt : undefined);
+  const directFinalPrompt = imagePrompt(directPrompt, reference ? referencePrompt : undefined);
 
-  const nanoBanana = await runNanoBanana(env, finalPrompt, referenceImage);
+  const nanoBanana = await runNanoBanana(env, directFinalPrompt, referenceImage);
   if (nanoBanana) {
     return {
       image: nanoBanana.image,
-      prompt: finalPrompt,
+      prompt: directFinalPrompt,
       edited: !!reference,
       provider: nanoBanana.provider,
     };
   }
+
+  const workersPrompt = await bestEffortWorkersPrompt(env, userPrompt);
+  const finalPrompt = imagePrompt(workersPrompt, reference ? referencePrompt : undefined);
 
   if (reference) {
     const edited = await env.AI.run(IMAGE_EDIT_MODEL, {
@@ -191,20 +262,39 @@ export async function runImage(
     };
   }
 
-  const result = await env.AI.run(IMAGE_MODEL, {
-    prompt: finalPrompt,
-    steps: 8,
-    seed: randomSeed(),
-  });
-
-  const base64 = String(result?.image ?? result?.result?.image ?? '').trim();
-  if (!base64 || base64.length > MAX_PROVIDER_IMAGE_BASE64 || !/^[A-Za-z0-9+/=]+$/.test(base64)) {
-    throw new Error('Empty or invalid image response');
+  try {
+    const result = await env.AI.run(IMAGE_MODEL, {
+      prompt: finalPrompt,
+      steps: 8,
+      seed: randomSeed(),
+    });
+    const base64 = String(result?.image ?? result?.result?.image ?? '').replace(/\s+/g, '').trim();
+    if (!base64 || base64.length > MAX_PROVIDER_IMAGE_BASE64 || !/^[A-Za-z0-9+/=]+$/.test(base64)) {
+      throw new Error('Empty or invalid FLUX image response');
+    }
+    return {
+      image: `data:image/jpeg;base64,${base64}`,
+      prompt: finalPrompt,
+      edited: false,
+      provider: IMAGE_MODEL,
+    };
+  } catch (primaryError) {
+    console.warn(JSON.stringify({
+      event: 'workers_image_primary_failed',
+      model: IMAGE_MODEL,
+      message: primaryError instanceof Error ? primaryError.message : 'unknown_primary_image_error',
+    }));
+    const fallback = await env.AI.run(IMAGE_FALLBACK_MODEL, {
+      prompt: finalPrompt,
+      num_steps: 4,
+      guidance: 7.5,
+      seed: randomSeed(),
+    });
+    return {
+      image: await bytesToDataUrl(fallback, 'image/png'),
+      prompt: finalPrompt,
+      edited: false,
+      provider: IMAGE_FALLBACK_MODEL,
+    };
   }
-  return {
-    image: `data:image/jpeg;base64,${base64}`,
-    prompt: finalPrompt,
-    edited: false,
-    provider: IMAGE_MODEL,
-  };
 }
