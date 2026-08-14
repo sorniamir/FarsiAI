@@ -1,7 +1,7 @@
 {
   "name": "farsiai",
   "private": true,
-  "version": "0.5.3",
+  "version": "0.6.0",
   "workspaces": ["apps/mobile", "apps/api", "apps/desktop"],
   "scripts": {
     "mobile": "npm --workspace apps/mobile run start",
