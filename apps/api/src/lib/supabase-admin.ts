@@ -37,6 +37,18 @@ export function supabaseAdminFetch(
   return fetch(`${config.url}/rest/v1/${path}`, { ...init, headers: adminHeaders(config, init) });
 }
 
+/** Calls Supabase Storage API from the Worker only. */
+export function supabaseStorageAdminFetch(
+  env: Env,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> | null {
+  const config = adminConfig(env);
+  if (!config) return null;
+  const normalized = path.replace(/^\/+/, '');
+  return fetch(`${config.url}/storage/v1/${normalized}`, { ...init, headers: adminHeaders(config, init) });
+}
+
 /**
  * Calls Supabase Auth Admin API from the Worker only.
  * The secret/service-role key never leaves the server and is never embedded in the admin page.
