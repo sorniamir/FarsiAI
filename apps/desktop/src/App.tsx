@@ -1,11 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { open } from '@tauri-apps/plugin-dialog';
 import { DesktopVoiceChat } from './components/DesktopVoiceChat';
 import { CodexStudio } from './components/CodexStudio';
-import { useDesktopAgent } from './hooks/useDesktopAgent';
 import { prepareAttachments } from './lib/chatAttachments';
-import { planAgentStep, type AgentObservation, type AgentToolCall } from './services/agent';
 import { sendAiRequest, type AiMode, type ApiAttachment, type DailyQuota } from './services/api';
 import { getCurrentUser, onAuthChanged, signIn, signOut, signUp } from './services/auth';
 import {
@@ -17,7 +14,7 @@ import {
   type ConversationSummary,
 } from './services/data';
 
-type Tab = 'chat' | 'voice' | 'codex' | 'computer';
+type Tab = 'chat' | 'voice' | 'codex';
 type UiMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -27,7 +24,6 @@ type UiMessage = {
   attachments?: ApiAttachment[];
   replyToId?: string;
 };
-type ApprovalState = { title: string; detail: string; confirmLabel: string };
 
 const USER_FULL_QUOTA: DailyQuota = { chatRemaining: 10, imageRemaining: 4 };
 const GUEST_FULL_QUOTA: DailyQuota = { chatRemaining: 5, imageRemaining: 2 };
@@ -46,29 +42,17 @@ function formatDate(value: string): string {
   }
 }
 
-function toolPath(workspace: string, relative: string): string {
-  const base = workspace.replace(/[\\/]+$/, '');
-  const clean = relative.trim().replace(/^[.][\\/]?/, '').replace(/^[\\/]+/, '');
-  if (!clean || clean === '.') return base;
-  const separator = base.includes('\\') ? '\\' : '/';
-  return `${base}${separator}${clean.replace(/[\\/]+/g, separator)}`;
-}
-
-function truncate(value: string, max = 65000): string {
-  return value.length > max ? `${value.slice(0, max)}\n…[truncated]` : value;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
-}
-
 function formatFileSize(size: number): string {
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function quotaSummary(quota: DailyQuota, guest: boolean): string {
+  if (quota.unlimited) return 'Chat و Image نامحدود';
+  return `Chat ${quota.chatRemaining} · Image ${quota.imageRemaining}${guest ? ' · Guest' : ''}`;
+}
+
 export default function AppFinal() {
-  const agent = useDesktopAgent();
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [guestMode, setGuestMode] = useState(false);
@@ -84,20 +68,11 @@ export default function AppFinal() {
   const [attachments, setAttachments] = useState<ApiAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<UiMessage | null>(null);
   const [composerError, setComposerError] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-
-  const [workspace, setWorkspace] = useState('');
-  const [workspaceGranted, setWorkspaceGranted] = useState(false);
-  const [selectedFile, setSelectedFile] = useState('');
-  const [editorValue, setEditorValue] = useState('');
-  const [command, setCommand] = useState('npm');
-  const [commandArgs, setCommandArgs] = useState('run test');
-  const [agentTask, setAgentTask] = useState('');
-  const [agentRunning, setAgentRunning] = useState(false);
-  const [agentTimeline, setAgentTimeline] = useState<string[]>([]);
-  const [approval, setApproval] = useState<ApprovalState | null>(null);
-  const approvalResolver = useRef<((approved: boolean) => void) | null>(null);
-  const agentAbortRef = useRef<AbortController | null>(null);
+  const dragDepthRef = useRef(0);
+  const copyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -114,7 +89,7 @@ export default function AppFinal() {
     });
     return () => {
       mounted = false;
-      agentAbortRef.current?.abort();
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
       unsubscribe();
     };
   }, []);
@@ -124,7 +99,6 @@ export default function AppFinal() {
       void refreshCloudState();
       return;
     }
-
     setAccount({ plan: 'free' });
     setConversations([]);
     setConversationId(undefined);
@@ -147,6 +121,8 @@ export default function AppFinal() {
     setAttachments([]);
     setReplyTarget(null);
     setComposerError('');
+    setDragActive(false);
+    dragDepthRef.current = 0;
   }
 
   function enterGuest() {
@@ -193,6 +169,32 @@ export default function AppFinal() {
     }
   }
 
+  function handleDragEnter(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (sending || !event.dataTransfer.types.includes('Files')) return;
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragActive(false);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (event.dataTransfer.types.includes('Files')) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+    if (sending) return;
+    void handleAttachmentFiles(event.dataTransfer.files);
+  }
+
   function removeAttachment(id: string) {
     setAttachments((current) => current.filter((item) => item.id !== id));
   }
@@ -205,17 +207,23 @@ export default function AppFinal() {
     setComposerError('');
   }
 
-  function requestApproval(next: ApprovalState): Promise<boolean> {
-    setApproval(next);
-    return new Promise((resolve) => {
-      approvalResolver.current = resolve;
-    });
+  async function copyMessage(message: UiMessage) {
+    const value = message.text?.trim() || message.revisedPrompt?.trim();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedMessageId(message.id);
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopiedMessageId(null), 1400);
+    } catch {
+      setComposerError('کپی متن در این محیط در دسترس نیست.');
+    }
   }
 
-  function resolveApproval(value: boolean) {
-    setApproval(null);
-    approvalResolver.current?.(value);
-    approvalResolver.current = null;
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    void submitChat();
   }
 
   async function submitChat(prefill?: string) {
@@ -341,217 +349,6 @@ export default function AppFinal() {
     setTab('chat');
   }
 
-  async function grantWorkspace(path: string) {
-    const normalized = path.trim();
-    if (!normalized) return;
-    try {
-      await agent.grantDirectory(normalized);
-      setWorkspace(normalized);
-      setWorkspaceGranted(true);
-      setSelectedFile('');
-      setEditorValue('');
-      setAgentTimeline((current) => ['✓ Workspace approved', ...current]);
-    } catch (error) {
-      setWorkspaceGranted(false);
-      setAgentTimeline((current) => [`✕ ${String(error)}`, ...current]);
-    }
-  }
-
-  async function browseWorkspace() {
-    try {
-      const selected = await open({ directory: true, multiple: false, title: 'انتخاب Workspace برای FarsiAI Codex' });
-      if (!selected) return;
-      const path = Array.isArray(selected) ? selected[0] : selected;
-      if (typeof path === 'string' && path.trim()) await grantWorkspace(path);
-    } catch (error) {
-      setAgentTimeline((current) => [`✕ Folder picker: ${String(error)}`, ...current]);
-    }
-  }
-
-  async function openFile(path: string) {
-    try {
-      const content = await agent.readFile(path);
-      setSelectedFile(path);
-      setEditorValue(content);
-    } catch (error) {
-      setAgentTimeline((current) => [`✕ ${String(error)}`, ...current]);
-    }
-  }
-
-  async function saveSelectedFile() {
-    if (!selectedFile) return;
-    const approved = await requestApproval({
-      title: 'اجازه ذخیره فایل',
-      detail: `FarsiAI می‌خواهد این فایل را تغییر دهد:\n${selectedFile}\n\nقبل از تغییر، Backup خودکار ساخته می‌شود.`,
-      confirmLabel: 'ذخیره فایل',
-    });
-    if (!approved) return;
-
-    try {
-      const backup = await agent.writeFile(selectedFile, editorValue);
-      setAgentTimeline((current) => [backup ? '✓ Saved · backup created' : '✓ Saved new file', ...current]);
-    } catch (error) {
-      setAgentTimeline((current) => [`✕ ${String(error)}`, ...current]);
-    }
-  }
-
-  async function runManualCommand() {
-    if (!workspaceGranted) {
-      setAgentTimeline((current) => ['ابتدا Workspace را approve کن.', ...current]);
-      return;
-    }
-    const args = commandArgs.trim().split(/\s+/).filter(Boolean);
-    const approved = await requestApproval({
-      title: 'اجازه اجرای Terminal',
-      detail: `${command} ${args.join(' ')}\n\nWorking directory:\n${workspace}`,
-      confirmLabel: 'اجرا',
-    });
-    if (!approved) return;
-
-    try {
-      await agent.runCommand(command.trim(), args, workspace);
-    } catch (error) {
-      setAgentTimeline((current) => [`✕ ${String(error)}`, ...current]);
-    }
-  }
-
-  async function executeAgentTool(tool: AgentToolCall): Promise<string> {
-    if (tool.name === 'list_directory') {
-      const path = toolPath(workspace, tool.arguments.path);
-      const entries = await agent.listDirectory(path);
-      return truncate(JSON.stringify(entries.map((entry) => ({ name: entry.name, is_dir: entry.is_dir }))));
-    }
-
-    if (tool.name === 'read_file') {
-      const path = toolPath(workspace, tool.arguments.path);
-      const content = await agent.readFile(path);
-      setSelectedFile(path);
-      setEditorValue(content);
-      return truncate(content);
-    }
-
-    if (tool.name === 'write_file') {
-      const path = toolPath(workspace, tool.arguments.path);
-      const approved = await requestApproval({
-        title: 'Codex می‌خواهد فایل را تغییر دهد',
-        detail: `${tool.arguments.path}\n\nقبل از Write از نسخه فعلی Backup گرفته می‌شود. تغییر فقط داخل Workspace تأییدشده انجام می‌شود.`,
-        confirmLabel: 'اعمال تغییر',
-      });
-      if (!approved) return 'USER_DENIED_WRITE';
-
-      const backup = await agent.writeFile(path, tool.arguments.content);
-      setSelectedFile(path);
-      setEditorValue(tool.arguments.content);
-      return backup ? 'WRITE_OK_BACKUP_CREATED' : 'WRITE_OK_NEW_FILE';
-    }
-
-    if (tool.name !== 'run_command') {
-      throw new Error(`ابزار ناشناخته «${String((tool as { name?: unknown }).name)}» اجازه اجرا ندارد.`);
-    }
-    const args = Array.isArray(tool.arguments.args) ? tool.arguments.args.map(String).slice(0, 64) : [];
-    if (!tool.arguments.command.trim()) throw new Error('دستور Terminal خالی یا نامعتبر است.');
-    const approved = await requestApproval({
-      title: 'Codex می‌خواهد Terminal اجرا کند',
-      detail: `${tool.arguments.command} ${args.join(' ')}\n\nWorkspace:\n${workspace}`,
-      confirmLabel: 'اجرا',
-    });
-    if (!approved) return 'USER_DENIED_COMMAND';
-
-    const result = await agent.runCommand(tool.arguments.command, args, workspace);
-    return truncate(`exit=${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
-  }
-
-  function stopAgent() {
-    if (!agentRunning) return;
-    agentAbortRef.current?.abort();
-    setAgentTimeline((current) => [...current, '■ توقف توسط کاربر درخواست شد.']);
-    if (approval) resolveApproval(false);
-  }
-
-  async function runAgent() {
-    const task = agentTask.trim();
-    if (!task || agentRunning) return;
-    if (!user) {
-      setAgentTimeline(['✕ برای استفاده از Codex باید وارد حساب شوی.']);
-      return;
-    }
-    if (!workspaceGranted) {
-      setAgentTimeline((current) => ['ابتدا Workspace را approve کن.', ...current]);
-      return;
-    }
-
-    const controller = new AbortController();
-    agentAbortRef.current = controller;
-    setAgentRunning(true);
-    setAgentTimeline([`● Task: ${task}`, '✓ Permission boundary active', '○ در حال برقراری اتصال امن با Codex Pro…']);
-    let observations: AgentObservation[] = [];
-    let plannerConnected = false;
-    let finished = false;
-
-    try {
-      for (let step = 1; step <= 24; step += 1) {
-        if (controller.signal.aborted) break;
-        setAgentTimeline((current) => [...current, `○ Planning step ${step}…`]);
-
-        const plan = await planAgentStep({ task, workspace, observations, signal: controller.signal });
-        if (controller.signal.aborted) break;
-        if (!plan.ok) {
-          const diagnostic = [plan.code, plan.requestId ? `request: ${plan.requestId}` : ''].filter(Boolean).join(' · ');
-          setAgentTimeline((current) => [...current, `✕ ${plan.error}${diagnostic ? ` (${diagnostic})` : ''}`]);
-          break;
-        }
-        if (!plannerConnected) {
-          plannerConnected = true;
-          setAgentTimeline((current) => [...current, '✓ Codex Pro connected']);
-        }
-        if (plan.type === 'final') {
-          finished = true;
-          setAgentTimeline((current) => [...current, `✓ ${plan.message}${plan.model ? ` · ${plan.model.replace('@cf/', '')}` : ''}`]);
-          break;
-        }
-
-        const tool = plan.tool;
-        setAgentTimeline((current) => [...current, `→ ${tool.name}${plan.model ? ` · ${plan.model.replace('@cf/', '')}` : ''}`]);
-        try {
-          const result = await executeAgentTool(tool);
-          observations = [...observations, { role: 'tool', name: tool.name, content: result }].slice(-18);
-          const commandExit = tool.name === 'run_command' ? result.match(/(?:^|\n)exit=(-?\d+)/i) : null;
-          const exitCode = commandExit ? Number(commandExit[1]) : 0;
-          const failed = tool.name === 'run_command' && exitCode !== 0;
-          setAgentTimeline((current) => [
-            ...current,
-            failed
-              ? `⚠ ${tool.name} failed · exit ${exitCode} · Codex will diagnose`
-              : result.includes('BACKUP')
-                ? `✓ ${tool.name} completed · backup protected`
-                : `✓ ${tool.name} completed`,
-          ]);
-          if (result.startsWith('USER_DENIED_')) {
-            observations = [...observations, { role: 'note', content: 'The user denied the requested side effect. Choose a safer alternative or stop.' }].slice(-18);
-          }
-        } catch (error) {
-          const message = String(error);
-          observations = [...observations, { role: 'tool', name: tool.name, content: `ERROR: ${message}` }].slice(-18);
-          setAgentTimeline((current) => [...current, `✕ ${message}`]);
-        }
-      }
-      if (!controller.signal.aborted && plannerConnected && !finished) {
-        setAgentTimeline((current) => [...current, '■ سقف ۲۴ مرحله رسید؛ Task را کوچک‌تر و دقیق‌تر بنویسید.']);
-      }
-    } catch (error) {
-      if (controller.signal.aborted || isAbortError(error)) {
-        setAgentTimeline((current) => [...current, '■ Agent متوقف شد.']);
-      } else {
-        setAgentTimeline((current) => [...current, `✕ ${String(error)}`]);
-      }
-    } finally {
-      if (controller.signal.aborted) setAgentTimeline((current) => [...current, '■ Agent stopped']);
-      if (agentAbortRef.current === controller) agentAbortRef.current = null;
-      setAgentRunning(false);
-      await refreshCloudState();
-    }
-  }
-
   if (!authReady) {
     return <div className="center-screen"><div className="loader-orb" /><div>در حال آماده‌سازی FarsiAI…</div></div>;
   }
@@ -565,13 +362,14 @@ export default function AppFinal() {
   const shownQuota = quota ?? fullQuota;
   const canSend = !sending && (input.trim().length > 0 || (mode === 'chat' && attachments.length > 0));
   const imageIsEditing = mode === 'image' && (Boolean(replyTarget?.image) || attachments.some((item) => item.mimeType.startsWith('image/')));
+  const premium = shownQuota.unlimited || account.plan === 'pro' || account.plan === 'admin';
 
   return (
     <div className="app-shell">
       <aside className="sidebar glass">
         <div className="brand-row">
           <img className="app-icon" src="/app-icon.png" alt="FarsiAI" />
-          <div><strong>FarsiAI</strong><span>Desktop Intelligence</span></div>
+          <div><strong>FarsiAI</strong><span>Commercial Intelligence</span></div>
         </div>
 
         <button className="new-chat" onClick={newConversation}>＋ گفتگوی جدید</button>
@@ -593,10 +391,10 @@ export default function AppFinal() {
           {!isGuest && conversations.length === 0 ? <div className="empty-mini">هنوز گفتگویی ذخیره نشده.</div> : null}
         </div>
 
-        <div className="profile-card">
+        <div className={premium ? 'profile-card premium-profile' : 'profile-card'}>
           <div>
             <strong>{isGuest ? 'Guest' : account.displayName || account.email || 'FarsiAI User'}</strong>
-            <span>{isGuest ? 'GUEST' : account.plan.toUpperCase()} · Chat {shownQuota.chatRemaining} · Image {shownQuota.imageRemaining}</span>
+            <span>{isGuest ? quotaSummary(shownQuota, true) : `${account.plan.toUpperCase()} · ${quotaSummary(shownQuota, false)}`}</span>
           </div>
           <button className="icon-button" onClick={leaveSession}>↪</button>
         </div>
@@ -605,59 +403,70 @@ export default function AppFinal() {
       <main className="main-area">
         <header className="topbar glass">
           <div>
-            <strong>{tab === 'chat' ? 'Chat' : tab === 'voice' ? 'Voice Chat Live' : 'Codex Studio'}</strong>
-            <span>{tab === 'chat' ? (isGuest ? 'Guest session · بدون ذخیره Cloud' : 'همان اکانت و تاریخچه روی موبایل و دسکتاپ') : tab === 'voice' ? 'میکروفن فقط با لمس کاربر فعال می‌شود' : 'Local tools با Permission-first security'}</span>
+            <strong>{tab === 'chat' ? 'FarsiAI Chat' : tab === 'voice' ? 'Voice Chat Live' : 'Codex Studio'}</strong>
+            <span>{tab === 'chat' ? (isGuest ? 'Guest session · بدون ذخیره Cloud' : premium ? 'Premium entitlement active · Mobile ↔ Desktop' : 'همان اکانت و تاریخچه روی موبایل و دسکتاپ') : tab === 'voice' ? 'میکروفن فقط با لمس کاربر فعال می‌شود' : 'Local tools با Permission-first security'}</span>
           </div>
           <div className="top-actions">
-            <span className="quota-pill">Chat {shownQuota.chatRemaining}/{fullQuota.chatRemaining} · Image {shownQuota.imageRemaining}/{fullQuota.imageRemaining}</span>
-            {agentRunning ? <span className="quota-pill">Agent working</span> : null}
+            <span className={premium ? 'quota-pill premium-quota' : 'quota-pill'}>{premium ? '◆ PRO · Chat & Image نامحدود' : `Chat ${shownQuota.chatRemaining}/${fullQuota.chatRemaining} · Image ${shownQuota.imageRemaining}/${fullQuota.imageRemaining}`}</span>
             <span className="status-pill"><i /> Online</span>
           </div>
         </header>
 
         {tab === 'chat' ? (
           <section className="chat-layout">
-            <div className="chat-stage glass">
+            <div
+              className={dragActive ? 'chat-stage glass drag-active' : 'chat-stage glass'}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              {dragActive ? <div className="drag-drop-overlay"><div className="drag-drop-orb">＋</div><strong>فایل‌ها را اینجا رها کن</strong><span>تصویر، PDF، Office، CSV و متن</span></div> : null}
+
               <div className="mode-row">
                 <div className="segmented">
                   <button className={mode === 'chat' ? 'active' : ''} onClick={() => setChatMode('chat')}>Chat</button>
-                  <button className={mode === 'image' ? 'active' : ''} onClick={() => setChatMode('image')}>Image</button>
+                  <button className={mode === 'image' ? 'active' : ''} onClick={() => setChatMode('image')}>Image Studio</button>
                 </div>
-                <span>{mode === 'image' ? (imageIsEditing ? 'ویرایش فقط تصویر انتخاب‌شده' : 'هر درخواست، تصویر جدید') : (isGuest ? 'Guest quota enforced by server' : 'Cloud-synced conversation')}</span>
+                <span>{mode === 'image' ? (imageIsEditing ? 'ویرایش فقط تصویر انتخاب‌شده' : 'هر درخواست، تصویر جدید') : premium ? 'Premium · بدون سقف روزانه' : (isGuest ? 'Guest quota enforced by server' : 'Cloud-synced conversation')}</span>
               </div>
 
               <div className="messages">
                 {messages.length === 0 ? (
-                  <div className="welcome">
-                    <img src="/app-icon.png" alt="FarsiAI" />
+                  <div className="welcome commercial-welcome">
+                    <div className="welcome-icon-shell"><img src="/app-icon.png" alt="FarsiAI" /></div>
+                    <span className="welcome-eyebrow">FARSIAI INTELLIGENCE</span>
                     <h1>{mode === 'chat' ? 'چطور می‌تونم کمکت کنم؟' : 'چه تصویری بسازیم؟'}</h1>
-                    <p>{isGuest ? 'حالت مهمان: ۵ پیام و ۲ تصویر در روز.' : 'پلن Free: ۱۰ پیام و ۴ تصویر در روز، با داده مشترک موبایل و دسکتاپ.'}</p>
+                    <p>{premium ? 'Premium فعال است؛ گفتگو و تصویر بدون سقف روزانه، با محدودیت‌های ایمنی سرویس.' : isGuest ? 'حالت مهمان: ۵ پیام و ۲ تصویر در روز.' : 'Chat، فایل و Image Studio با همان حساب مشترک موبایل و دسکتاپ.'}</p>
                     <div className="starter-grid">{STARTERS.map((starter) => <button key={starter} onClick={() => submitChat(starter)}>{starter}</button>)}</div>
                   </div>
                 ) : messages.map((message) => (
                   <article key={message.id} className={`message ${message.role}`}>
-                    <div className="message-label">{message.role === 'user' ? 'You' : 'FarsiAI'}</div>
-                    {message.attachments?.length ? (
-                      <div className="message-attachments">
-                        {message.attachments.map((attachment) => (
-                          <div className="message-attachment" key={attachment.id}>
-                            {attachment.previewUrl ? <img src={attachment.previewUrl} alt="attachment" /> : <span className="file-badge">FILE</span>}
-                            <div><strong>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></div>
-                          </div>
-                        ))}
+                    <div className="message-label">{message.role === 'user' ? 'YOU' : 'FARSIAI'}</div>
+                    <div className="message-surface">
+                      {message.attachments?.length ? (
+                        <div className="message-attachments">
+                          {message.attachments.map((attachment) => (
+                            <div className="message-attachment" key={attachment.id}>
+                              {attachment.previewUrl ? <img src={attachment.previewUrl} alt="attachment" /> : <span className="file-badge">FILE</span>}
+                              <div><strong>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {message.text ? <div className="message-text">{message.text}</div> : null}
+                      {message.image ? <img className="generated-image" src={message.image} alt="AI generated" /> : null}
+                      <div className="message-action-bar">
+                        {(message.text || message.revisedPrompt) ? <button onClick={() => void copyMessage(message)}>{copiedMessageId === message.id ? '✓ کپی شد' : '⧉ کپی'}</button> : null}
+                        {message.role === 'assistant' && message.image ? <button onClick={() => replyToImage(message)}>↩ ویرایش همین تصویر</button> : null}
                       </div>
-                    ) : null}
-                    {message.text ? <div className="message-text">{message.text}</div> : null}
-                    {message.image ? <img className="generated-image" src={message.image} alt="AI generated" /> : null}
-                    {message.role === 'assistant' && message.image ? (
-                      <div className="image-message-actions"><button className="secondary image-reply-button" onClick={() => replyToImage(message)}>↩ ویرایش همین تصویر</button></div>
-                    ) : null}
+                    </div>
                   </article>
                 ))}
-                {sending ? <div className="thinking"><i /><span>{mode === 'image' ? 'در حال پردازش تصویر…' : 'در حال فکر کردن…'}</span></div> : null}
+                {sending ? <div className="thinking commercial-thinking"><i /><div><strong>FarsiAI</strong><span>{mode === 'image' ? 'در حال پردازش تصویر…' : 'در حال آماده‌سازی پاسخ…'}</span></div></div> : null}
               </div>
 
-              <div className="composer composer-v046">
+              <div className="composer composer-v046 commercial-composer">
                 <input
                   ref={attachmentInputRef}
                   className="hidden-file-input"
@@ -688,137 +497,48 @@ export default function AppFinal() {
                 ) : null}
 
                 {composerError ? <div className="composer-error">{composerError}</div> : null}
-                <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode === 'image' ? 'تصویر موردنظرت را توصیف کن…' : 'پیام بنویس یا فایل اضافه کن…'} />
+                <div className="composer-meta-line"><span><i /> FarsiAI Intelligence</span><b className={premium ? 'premium-text' : ''}>{premium ? 'Premium · نامحدود' : mode === 'chat' ? `${shownQuota.chatRemaining} پیام باقی‌مانده` : `${shownQuota.imageRemaining} تصویر باقی‌مانده`}</b></div>
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder={mode === 'image' ? 'صحنه، سبک و جزئیات تصویر را توصیف کن…' : 'هر چیزی بپرس یا فایل را Drag & Drop کن…'}
+                  maxLength={6000}
+                />
                 <div className="composer-footer">
                   <div className="composer-tools">
-                    <button className="composer-tool" disabled={sending} onClick={() => attachmentInputRef.current?.click()}><b>＋</b><span>ابزارها</span></button>
+                    <button className="composer-tool" disabled={sending} onClick={() => attachmentInputRef.current?.click()}><b>＋</b><span>فایل</span></button>
                     <button className={mode === 'image' ? 'composer-tool selected' : 'composer-tool'} disabled={sending} onClick={() => setChatMode('image')}><b>▧</b><span>تصویر</span></button>
                     <button className="composer-tool" disabled={sending} onClick={() => setTab('voice')}><b>◉</b><span>صوتی</span></button>
-                    <span className="composer-model"><i /> FarsiAI Pro</span>
+                    <span className="composer-model"><i /> Enter ارسال · Shift+Enter خط جدید</span>
                   </div>
-                  <button className="primary" disabled={!canSend} onClick={() => submitChat()}>{sending ? '…' : 'ارسال ↑'}</button>
+                  <button className="primary commercial-send" disabled={!canSend} onClick={() => submitChat()}>{sending ? '…' : 'ارسال ↑'}</button>
                 </div>
-                <div className="composer-policy">ویرایش تصویر فقط با «ویرایش همین تصویر» یا ضمیمه‌کردن تصویر فعال می‌شود؛ تصاویر قبلی خودکار استفاده نمی‌شوند.</div>
+                <div className="composer-policy">{mode === 'image' ? 'ویرایش فقط با تصویر انتخاب‌شده انجام می‌شود؛ تصاویر قبلی خودکار استفاده نمی‌شوند.' : 'خروجی‌های مهم را قبل از استفاده نهایی بررسی کنید.'}</div>
               </div>
             </div>
 
-            <aside className="inspector glass">
-              <h3>{isGuest ? 'Guest session' : 'Account sync'}</h3>
+            <aside className="inspector glass commercial-inspector">
+              <div className={premium ? 'membership-mini premium' : 'membership-mini'}>
+                <span>{premium ? 'PREMIUM ACTIVE' : isGuest ? 'GUEST' : 'MEMBERSHIP'}</span>
+                <strong>{premium ? 'FarsiAI Pro' : isGuest ? 'Guest Access' : 'FarsiAI Free'}</strong>
+                <p>{premium ? 'سقف روزانه Chat و Image برداشته شده است.' : 'وضعیت حساب و سهمیه با Cloud همگام است.'}</p>
+              </div>
               <Info label="Plan" value={isGuest ? 'guest' : account.plan} />
-              <Info label="Chat باقی‌مانده" value={`${shownQuota.chatRemaining} از ${fullQuota.chatRemaining}`} />
-              <Info label="Image باقی‌مانده" value={`${shownQuota.imageRemaining} از ${fullQuota.imageRemaining}`} />
+              <Info label="Chat" value={premium ? 'نامحدود' : `${shownQuota.chatRemaining} از ${fullQuota.chatRemaining}`} />
+              <Info label="Image" value={premium ? 'نامحدود' : `${shownQuota.imageRemaining} از ${fullQuota.imageRemaining}`} />
               {!isGuest ? <Info label="Email" value={account.email || '—'} /> : null}
               <div className="divider" />
               <h3>{isGuest ? 'Privacy' : 'Shared data'}</h3>
-              <p>{isGuest ? 'حالت مهمان به تاریخچه حساب دسترسی ندارد و Conversationها در حساب ذخیره نمی‌شوند.' : 'Conversationها و سهمیه از همان Supabase موبایل خوانده می‌شوند؛ Desktop دیتابیس جدا ندارد.'}</p>
+              <p>{isGuest ? 'حالت مهمان به تاریخچه حساب دسترسی ندارد و Conversationها در حساب ذخیره نمی‌شوند.' : 'Conversationها و Plan از همان حساب Supabase موبایل خوانده می‌شوند؛ Desktop دیتابیس جدا ندارد.'}</p>
               <div className="sync-badge">{isGuest ? 'Guest · 5 Chat · 2 Image' : '✓ Mobile ↔ Desktop'}</div>
             </aside>
           </section>
         ) : null}
 
-        {tab === 'voice' ? <DesktopVoiceChat ask={submitVoice} remaining={shownQuota.chatRemaining} /> : null}
-
+        {tab === 'voice' ? <DesktopVoiceChat ask={submitVoice} remaining={premium ? 999999 : shownQuota.chatRemaining} /> : null}
         {tab === 'codex' ? (isGuest ? <LoginRequired title="Codex" onExit={leaveSession} /> : <CodexStudio />) : null}
-
-        {false && tab === 'codex' ? (
-          isGuest ? <LoginRequired title="Codex" onExit={leaveSession} /> : (
-          <section className="workspace-layout">
-            <div className="workspace-main glass">
-              <div className="workspace-title">
-                <div><h2>Codex Pro Agent</h2><p>پروژه را تحلیل می‌کند، فایل واقعی را می‌خواند و تغییر می‌دهد، تست/بیلد را اجرا می‌کند و تا نتیجه معتبر روی خطاها ادامه می‌دهد.</p></div>
-                <span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>{workspaceGranted ? 'Workspace approved' : 'No workspace'}</span>
-              </div>
-
-              <div className="field-row">
-                <input value={workspace} onChange={(event) => { setWorkspace(event.target.value); setWorkspaceGranted(false); }} placeholder="یک پوشه انتخاب کن یا مسیر را وارد کن" />
-                <button className="secondary" onClick={browseWorkspace}>Browse…</button>
-                <button className="secondary" disabled={!workspace.trim()} onClick={() => grantWorkspace(workspace)}>Approve</button>
-              </div>
-
-              <div className="agent-task-card">
-                <div className="codex-command-presets">
-                  <span>شروع سریع</span>
-                  <button disabled={agentRunning} onClick={() => setAgentTask('پروژه را بررسی کن، خطاهای مهم را پیدا کن و قبل از هر تغییر یک برنامه کوتاه ارائه بده.')}>بررسی پروژه</button>
-                  <button disabled={agentRunning} onClick={() => setAgentTask('تست‌های پروژه را اجرا کن، علت خطاها را مشخص کن و با کمترین تغییر امن اصلاحشان کن.')}>رفع تست‌ها</button>
-                  <button disabled={agentRunning} onClick={() => setAgentTask('کد را از نظر امنیت، پایداری و تجربه کاربری بررسی کن و موارد بحرانی را اصلاح کن.')}>بازبینی حرفه‌ای</button>
-                </div>
-                <textarea
-                  value={agentTask}
-                  onChange={(event) => setAgentTask(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                      event.preventDefault();
-                      void runAgent();
-                    }
-                  }}
-                  placeholder="هدف را طبیعی و دقیق بنویس؛ مثلاً خطای ورود را پیدا کن، تست مرتبط بساز، اصلاح کن و نتیجه را گزارش بده…"
-                />
-                <div className="codex-safety-strip">
-                  <span>محصور در Workspace</span><span>تأیید قبل از تغییر</span><span>Backup خودکار</span><span>Ctrl + Enter برای اجرا</span>
-                </div>
-                <div className="field-row">
-                  <button className="primary wide" disabled={!agentTask.trim() || agentRunning} onClick={runAgent}>{agentRunning ? 'Codex در حال اجراست…' : 'شروع Codex Agent'}</button>
-                  <button className="secondary" disabled={!agentRunning} onClick={stopAgent}>Stop Agent</button>
-                </div>
-              </div>
-
-              <div className="codex-columns">
-                <div className="file-browser">
-                  <div className="panel-head"><span>Workspace files</span><button onClick={() => workspaceGranted && agent.listDirectory(workspace)}>Refresh</button></div>
-                  <div className="file-list">
-                    {agent.entries.map((entry) => <button key={entry.path} onClick={() => entry.is_dir ? agent.listDirectory(entry.path) : openFile(entry.path)}><span>{entry.is_dir ? '▸' : '·'} {entry.name}</span><small>{entry.is_dir ? 'folder' : 'file'}</small></button>)}
-                    {agent.entries.length === 0 ? <div className="empty-mini">بعد از Approve، فایل‌ها اینجا دیده می‌شوند.</div> : null}
-                  </div>
-                </div>
-
-                <div className="editor-panel">
-                  <div className="panel-head"><span>{selectedFile || 'File preview'}</span><button disabled={!selectedFile} onClick={saveSelectedFile}>Save</button></div>
-                  <textarea className="code-editor" value={editorValue} onChange={(event) => setEditorValue(event.target.value)} placeholder="فایل انتخابی اینجا نمایش داده می‌شود…" spellCheck={false} />
-                </div>
-              </div>
-            </div>
-
-            <aside className="inspector glass activity-inspector">
-              <h3>Permission Center</h3>
-              <Feature title="Workspace" value={workspaceGranted ? 'Approved' : 'Required'} ready={workspaceGranted} />
-              <Feature title="Read files" value={workspaceGranted ? 'Scoped' : 'Locked'} ready={workspaceGranted} />
-              <Feature title="Write files" value="Ask every time" ready />
-              <Feature title="Terminal" value="Ask every time" ready />
-              <Feature title="Auto backup" value="Enabled" ready />
-              <div className="divider" />
-              <h3>Live Activity</h3>
-              <div className="timeline">{agentTimeline.map((item, index) => <div key={`${index}-${item}`} className="timeline-item"><i /><span>{item}</span></div>)}{agentTimeline.length === 0 ? <p>هنوز Task اجرا نشده.</p> : null}</div>
-              <div className="divider" />
-              <h3>Safety</h3>
-              <ul><li>Read فقط داخل Workspace تأییدشده</li><li>Write و Terminal نیازمند Approval مستقیم</li><li>Backup خودکار قبل از تغییر فایل</li><li>مسیر واقعی PC به Cloud planner ارسال نمی‌شود</li><li>بدون shell آزاد و با command allowlist</li><li>Stop Agent همیشه در دسترس است</li></ul>
-            </aside>
-          </section>)
-        ) : null}
-
-        {false && tab === 'computer' ? (
-          isGuest ? <LoginRequired title="Computer" onExit={leaveSession} /> : (
-          <section className="workspace-layout">
-            <div className="workspace-main glass">
-              <div className="workspace-title"><div><h2>Computer</h2><p>کنترل Local tools با تأیید کاربر و محدوده Workspace.</p></div><span className={workspaceGranted ? 'workspace-status ready' : 'workspace-status'}>{workspaceGranted ? 'Permission active' : 'Manual tools'}</span></div>
-              <div className="field-row">
-                <input value={workspace} onChange={(event) => { setWorkspace(event.target.value); setWorkspaceGranted(false); }} placeholder="Workspace" />
-                <button className="secondary" onClick={browseWorkspace}>Browse…</button>
-                <button className="secondary" disabled={!workspace.trim()} onClick={() => grantWorkspace(workspace)}>Approve</button>
-              </div>
-              <div className="terminal-card">
-                <div className="terminal-fields"><input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="npm" /><input value={commandArgs} onChange={(event) => setCommandArgs(event.target.value)} placeholder="run test" /><button className="primary" disabled={!workspaceGranted || agent.busy} onClick={runManualCommand}>Run</button></div>
-                <pre>{agent.terminalOutput || 'Terminal output will appear here.'}</pre>
-              </div>
-              <div className="future-grid"><Feature title="Files" value="Active" ready /><Feature title="Terminal" value="Active" ready /><Feature title="Native folder picker" value="Active" ready /><Feature title="Auto backup" value="Active" ready /><Feature title="Browser" value="Next" /><Feature title="Screen Vision" value="Next" /></div>
-            </div>
-            <aside className="inspector glass activity-inspector"><h3>Local Agent log</h3><div className="timeline">{agent.logs.map((item, index) => <div className="timeline-item" key={`${index}-${item}`}><i /><span>{item}</span></div>)}</div></aside>
-          </section>)
-        ) : null}
       </main>
-
-      {approval ? (
-        <div className="approval-backdrop"><div className="approval-modal glass"><div className="approval-icon">!</div><h2>{approval.title}</h2><pre>{approval.detail}</pre><p>این عملیات فقط با تأیید مستقیم شما انجام می‌شود.</p><div className="approval-actions"><button className="secondary" onClick={() => resolveApproval(false)}>لغو</button><button className="primary" onClick={() => resolveApproval(true)}>{approval.confirmLabel}</button></div></div></div>
-      ) : null}
     </div>
   );
 }
@@ -849,15 +569,16 @@ function AuthScreen({ onAuthenticated, onGuest }: { onAuthenticated: () => void;
   }
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen commercial-auth">
       <div className="auth-ambient" />
       <section className="auth-card glass">
-        <img src="/app-icon.png" alt="FarsiAI" />
-        <h1>FarsiAI Desktop</h1>
-        <p>ورود با حساب اصلی: ۱۰ پیام و ۴ تصویر در روز + Sync موبایل و دسترسی Codex.</p>
+        <div className="auth-icon-shell"><img src="/app-icon.png" alt="FarsiAI" /></div>
+        <span className="auth-eyebrow">COMMERCIAL RC</span>
+        <h1>FarsiAI</h1>
+        <p>یک حساب، یک تاریخچه و یک تجربه مشترک روی Mobile و Windows.</p>
         <div className="auth-tabs"><button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>ورود</button><button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>ساخت حساب</button></div>
-        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" dir="ltr" />
-        <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" dir="ltr" />
+        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" dir="ltr" autoComplete="email" />
+        <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" dir="ltr" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} onKeyDown={(event) => { if (event.key === 'Enter') void submit(); }} />
         {status ? <div className="auth-status">{status}</div> : null}
         <button className="primary wide" disabled={busy} onClick={submit}>{busy ? '…' : mode === 'signin' ? 'ورود به FarsiAI' : 'ساخت حساب'}</button>
         <div className="divider" />
@@ -869,7 +590,7 @@ function AuthScreen({ onAuthenticated, onGuest }: { onAuthenticated: () => void;
 }
 
 function LoginRequired({ title, onExit }: { title: string; onExit: () => void }) {
-  return <section className="workspace-layout"><div className="workspace-main glass"><div className="welcome"><img src="/app-icon.png" alt="FarsiAI" /><h1>{title} نیازمند ورود است</h1><p>برای دسترسی به PC و اجرای دستور، ابتدا با حساب FarsiAI وارد شو.</p><button className="primary" onClick={onExit}>رفتن به صفحه ورود</button></div></div></section>;
+  return <section className="workspace-layout"><div className="workspace-main glass"><div className="welcome"><img src="/app-icon.png" alt="FarsiAI" /><h1>{title} نیازمند ورود است</h1><p>برای دسترسی به PC و اجرای ابزارهای محلی، ابتدا با حساب FarsiAI وارد شو.</p><button className="primary" onClick={onExit}>رفتن به صفحه ورود</button></div></div></section>;
 }
 
 function NavButton({ active, label, caption, onClick }: { active: boolean; label: string; caption: string; onClick: () => void }) {
@@ -878,8 +599,4 @@ function NavButton({ active, label, caption, onClick }: { active: boolean; label
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="info-row"><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function Feature({ title, value, ready = false }: { title: string; value: string; ready?: boolean }) {
-  return <div className={ready ? 'feature-card ready' : 'feature-card'}><strong>{title}</strong><span>{value}</span></div>;
 }
