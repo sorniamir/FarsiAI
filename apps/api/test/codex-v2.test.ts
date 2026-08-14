@@ -29,7 +29,7 @@ function body(observations: unknown[] = []) {
     task: 'فایل package.json را بررسی کن و فقط در صورت نیاز قدم بعدی را پیشنهاد بده.',
     workspace: { boundary: 'approved-workspace', label: 'Codex v2 test workspace' },
     observations,
-    client: { kind: 'desktop', version: '0.5.3', locale: 'fa-IR' },
+    client: { kind: 'desktop', version: '0.6.0-codex-studio', locale: 'fa-IR' },
     capabilities: {
       protocol: 'farsiai.codex.desktop.v2',
       tools: [{ name: 'read_file', permission: 'automatic' }],
@@ -142,7 +142,6 @@ describe('Codex Studio v2 free-plan planner', () => {
     authenticate();
     const payload: any = body();
     payload.task = 'یک فایل document.txt خالی بساز';
-    payload.client.version = '0.5.3';
     payload.capabilities.tools = [{ name: 'write_file', permission: 'ask' }];
     const aiRun = mock.fn(async () => ({
       output: [{
@@ -168,7 +167,6 @@ describe('Codex Studio v2 free-plan planner', () => {
     authenticate();
     const payload: any = body();
     payload.task = 'یک فایل متنی با نام FarsiAI بساز';
-    payload.client.version = '0.5.3';
     payload.capabilities.tools = [{ name: 'write_file', permission: 'ask' }];
     let calls = 0;
     const aiRun = mock.fn(async (_model: string, input: any) => {
@@ -188,6 +186,81 @@ describe('Codex Studio v2 free-plan planner', () => {
     assert.equal(result.tool.name, 'write_file');
     assert.equal(result.tool.arguments.path, 'FarsiAI.txt');
     assert.equal(result.tool.arguments.content, '');
+    assert.equal(calls, 2);
+  });
+
+  it('offers broker-backed TypeScript validation tools and project-aware guidance', async () => {
+    authenticate();
+    const payload: any = body();
+    payload.task = 'بعد از تغییرات TypeScript پروژه را typecheck کن';
+    payload.capabilities.tools = [{ name: 'run_command', permission: 'ask' }];
+    payload.capabilities.safeCommands = ['tsc'];
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      const commandEnum = input.tools[0].parameters.properties.command.enum as string[];
+      assert.ok(commandEnum.includes('tsc'));
+      assert.ok(commandEnum.includes('eslint'));
+      assert.ok(commandEnum.includes('vitest'));
+      assert.equal(commandEnum.includes('pip'), false);
+      assert.match(input.messages[0].content, /mental project map/i);
+      assert.match(input.messages[0].content, /package\.json/);
+      assert.match(input.messages[0].content, /Do not install packages/i);
+      return {
+        output: [{
+          type: 'function_call',
+          call_id: 'fc-tsc',
+          name: 'run_command',
+          arguments: '{"command":"tsc","args":["--noEmit"],"cwd":"."}',
+        }],
+      };
+    });
+
+    const response = await handleCodexTurn(request(payload), envWith(aiRun));
+    assert.equal(response.status, 200);
+    const result = await response.json() as any;
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'tool');
+    assert.equal(result.tool.name, 'run_command');
+    assert.equal(result.tool.arguments.command, 'tsc');
+    assert.deepEqual(result.tool.arguments.args, ['--noEmit']);
+    assert.equal(result.tool.arguments.cwd, '.');
+  });
+
+  it('repairs a command that is not backed by the native broker before execution', async () => {
+    authenticate();
+    const payload: any = body();
+    payload.task = 'پروژه TypeScript را بررسی کن';
+    payload.capabilities.tools = [{ name: 'run_command', permission: 'ask' }];
+    let calls = 0;
+    const aiRun = mock.fn(async (_model: string, input: any) => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          output: [{
+            type: 'function_call',
+            call_id: 'bad-pip',
+            name: 'run_command',
+            arguments: '{"command":"pip","args":["--version"],"cwd":"."}',
+          }],
+        };
+      }
+      assert.match(input.messages.at(-1).content, /broker-backed commands/);
+      assert.doesNotMatch(input.messages.at(-1).content, /\bpip\b/);
+      return {
+        output: [{
+          type: 'function_call',
+          call_id: 'fixed-tsc',
+          name: 'run_command',
+          arguments: '{"command":"tsc","args":["--noEmit"],"cwd":"."}',
+        }],
+      };
+    });
+
+    const response = await handleCodexTurn(request(payload), envWith(aiRun));
+    assert.equal(response.status, 200);
+    const result = await response.json() as any;
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'tool');
+    assert.equal(result.tool.arguments.command, 'tsc');
     assert.equal(calls, 2);
   });
 
