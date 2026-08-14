@@ -134,18 +134,24 @@ describe('FarsiAI Worker', () => {
     assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 0);
   });
 
-  it('generates a playable WAV response for Persian AI speech', async () => {
+  it('generates a playable WAV response for Persian AI speech through Gemini TTS', async () => {
     const pcm = Buffer.from([0, 0, 20, 0, 40, 0, 20, 0]);
-    const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
-      assert.equal(model, 'google/gemini-3.1-flash-tts');
-      assert.equal(input.text, 'پاسخ آزمایشی فارسی');
-      assert.equal(input.voice, 'Kore');
-      return {
-        audio: `data:audio/L16;codec=pcm;rate=24000;base64,${pcm.toString('base64')}`,
-        gatewayMetadata: { keySource: 'Unified' },
-      };
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/v1beta/models/gemini-3.1-flash-tts-preview:generateContent')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as any;
+        assert.deepEqual(body.generationConfig.responseModalities, ['AUDIO']);
+        assert.equal(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Kore');
+        return Response.json({
+          candidates: [{ content: { parts: [{ inlineData: {
+            data: pcm.toString('base64'),
+            mimeType: 'audio/L16;codec=pcm;rate=24000',
+          } }] } }],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
     });
-    const env = createEnv({ AI: { run: aiRun } });
+    const env = createEnv({ GEMINI_API_KEY: 'test-gemini-key' });
 
     const response = await worker.fetch(ttsRequest(
       { text: 'پاسخ آزمایشی فارسی', language: 'fa' },
@@ -159,16 +165,21 @@ describe('FarsiAI Worker', () => {
     assert.equal(wav.subarray(0, 4).toString('ascii'), 'RIFF');
     assert.equal(wav.subarray(8, 12).toString('ascii'), 'WAVE');
     assert.equal(wav.length, 44 + pcm.length);
-    assert.equal(response.headers.get('x-farsiai-voice-model'), 'google/gemini-3.1-flash-tts');
+    assert.equal(response.headers.get('x-farsiai-voice-model'), 'gemini-3.1-flash-tts-preview');
     assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 1);
   });
 
-  it('reports an upstream error when the unified Persian TTS model is unavailable', async () => {
-    const env = createEnv({ AI: { run: mock.fn(async () => { throw new Error('model unavailable'); }) } });
+  it('reports an upstream error when both Persian Gemini TTS models are unavailable', async () => {
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('generativelanguage.googleapis.com')) return new Response('model unavailable', { status: 503 });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const env = createEnv({ GEMINI_API_KEY: 'test-gemini-key' });
     const response = await worker.fetch(ttsRequest({ text: 'سلام' }), env);
 
     assert.equal(response.status, 502);
-    assert.equal((await response.json() as { code: string }).code, 'VOICE_TTS_FAILED');
+    assert.equal((await response.json() as { code: string }).code, 'VOICE_TTS_PROVIDER_FAILED');
     assert.equal(env.API_RATE_LIMITER.limit.mock.callCount(), 1);
   });
 
