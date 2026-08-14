@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { supabase } from '../lib/supabase';
 
 export const CODEX_PROTOCOL = 'farsiai.codex.desktop.v2' as const;
-export const CODEX_CLIENT_VERSION = '0.5.3-codex-studio';
+export const CODEX_CLIENT_VERSION = '0.6.0-codex-studio';
 
 export type CodexToolName =
   | 'list_directory'
@@ -100,10 +100,13 @@ const MAX_REMOTE_OUTPUT = 120_000;
 const MAX_WRITE_CHARS = 5_000_000;
 const SIDE_EFFECT_TOOLS = new Set<CodexToolName>(['write_file', 'create_directory', 'run_command', 'launch_app']);
 
+// Keep this manifest exactly aligned with program_profile() in the native broker.
+// Commands listed here are only candidates; the native broker still validates the
+// executable, arguments, workspace boundary and asks for confirmation.
 export const SAFE_DEVELOPMENT_COMMANDS = [
-  'npm', 'node', 'git', 'python', 'python3', 'pnpm', 'yarn', 'npx', 'bun', 'deno',
+  'npm', 'npx', 'node', 'git', 'python', 'python3', 'pnpm', 'yarn', 'bun', 'deno',
   'cargo', 'rustc', 'go', 'dotnet', 'java', 'javac', 'mvn', 'gradle', 'pytest',
-  'pip', 'pip3', 'uv', 'ruff', 'rg',
+  'ruff', 'tsc', 'eslint', 'prettier', 'vitest',
 ] as const;
 
 const SAFE_COMMAND_SET = new Set<string>(SAFE_DEVELOPMENT_COMMANDS);
