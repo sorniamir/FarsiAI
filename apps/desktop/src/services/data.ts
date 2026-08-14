@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { DailyQuota } from './api';
+import { resolveStoredImageUrls } from './media';
 
 export type AccountSnapshot = {
   email?: string;
@@ -37,16 +38,19 @@ function isFresh(entry: CachedMessages | undefined): entry is CachedMessages {
   return !!entry && Date.now() - entry.cachedAt < MESSAGE_CACHE_TTL_MS;
 }
 
-function mapStoredMessages(data: any[]): StoredMessage[] {
+function mapStoredMessages(data: any[], imageUrls?: Map<string, string>): StoredMessage[] {
   return data
     .filter((row) => row.role === 'user' || row.role === 'assistant')
-    .map((row) => ({
-      id: String(row.id),
-      role: row.role as StoredMessage['role'],
-      content: String(row.content ?? ''),
-      imageUrl: row.image_url ? String(row.image_url) : undefined,
-      createdAt: row.created_at ? String(row.created_at) : undefined,
-    }));
+    .map((row) => {
+      const rawImage = row.image_url ? String(row.image_url) : undefined;
+      return {
+        id: String(row.id),
+        role: row.role as StoredMessage['role'],
+        content: String(row.content ?? ''),
+        imageUrl: rawImage ? (imageUrls?.get(rawImage) ?? rawImage) : undefined,
+        createdAt: row.created_at ? String(row.created_at) : undefined,
+      };
+    });
 }
 
 async function fetchConversationMessages(conversationId: string): Promise<StoredMessage[]> {
@@ -60,7 +64,8 @@ async function fetchConversationMessages(conversationId: string): Promise<Stored
     .limit(200);
 
   if (error || !data) return [];
-  const messages = mapStoredMessages(data);
+  const imageUrls = await resolveStoredImageUrls(data.map((row) => row.image_url ? String(row.image_url) : undefined));
+  const messages = mapStoredMessages(data, imageUrls);
   messageCache.set(conversationId, { messages, cachedAt: Date.now() });
   return messages;
 }
@@ -68,8 +73,6 @@ async function fetchConversationMessages(conversationId: string): Promise<Stored
 async function prefetchRecentConversations(conversations: ConversationSummary[]): Promise<void> {
   if (!supabase || prefetchPromise) return prefetchPromise ?? Promise.resolve();
 
-  // Image results are persisted as data URLs. Avoid preloading image/mixed threads,
-  // otherwise startup can download several megabytes before the user opens them.
   const ids = conversations
     .filter((item) => item.mode === 'chat')
     .slice(0, 6)
@@ -189,7 +192,6 @@ export async function listConversations(): Promise<ConversationSummary[]> {
     conversationVersions.set(conversation.id, conversation.updatedAt);
   }
 
-  // One background query warms recent text-only conversations without preloading image payloads.
   void prefetchRecentConversations(conversations);
   return conversations;
 }
