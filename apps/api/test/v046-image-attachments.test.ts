@@ -47,6 +47,7 @@ describe('v0.4.6 image and attachment contract', () => {
     const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
       assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
       assert.equal('image_b64' in input, false);
+      assert.equal(input.steps, 8);
       return { image: 'YWJj' };
     });
     const env = envWithAi({ run: aiRun });
@@ -70,6 +71,7 @@ describe('v0.4.6 image and attachment contract', () => {
     const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
       assert.equal(model, '@cf/runwayml/stable-diffusion-v1-5-img2img');
       assert.equal(input.image_b64, 'AA==');
+      assert.equal(input.strength, 0.45);
       return new Uint8Array([1, 2, 3]);
     });
     const env = envWithAi({ run: aiRun });
@@ -84,6 +86,63 @@ describe('v0.4.6 image and attachment contract', () => {
 
     assert.equal(response.status, 200);
     assert.equal((await response.json() as { edited: boolean }).edited, true);
+    assert.equal(aiRun.mock.callCount(), 1);
+  });
+
+  it('uses Gemini output_image directly when Nano Banana succeeds', async () => {
+    const aiRun = mock.fn(async () => ({ image: 'unused' }));
+    const env = { ...envWithAi({ run: aiRun }), GEMINI_API_KEY: 'test-gemini-key' };
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('generativelanguage.googleapis.com/v1beta/interactions')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { model?: string; response_format?: { type?: string } };
+        assert.equal(body.model, 'gemini-3.1-flash-image');
+        assert.equal(body.response_format?.type, 'image');
+        return Response.json({ output_image: { data: 'YWJjZA==', mime_type: 'image/png' } });
+      }
+      if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
+      if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const response = await worker.fetch(request({
+      mode: 'image',
+      message: 'premium futuristic product shot',
+      imageAction: 'generate',
+    }), env);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as { image: string; provider?: string; edited: boolean };
+    assert.equal(payload.image, 'data:image/png;base64,YWJjZA==');
+    assert.equal(payload.edited, false);
+    assert.equal(aiRun.mock.callCount(), 0);
+  });
+
+  it('falls back to Workers AI when Gemini image generation fails', async () => {
+    const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
+      assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
+      assert.equal(input.steps, 8);
+      return { image: 'ZmFsbGJhY2s=' };
+    });
+    const env = { ...envWithAi({ run: aiRun }), GEMINI_API_KEY: 'test-gemini-key' };
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('generativelanguage.googleapis.com/v1beta/interactions')) {
+        return new Response('provider unavailable', { status: 503 });
+      }
+      if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
+      if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const response = await worker.fetch(request({
+      mode: 'image',
+      message: 'fallback scene',
+      imageAction: 'generate',
+    }), env);
+
+    assert.equal(response.status, 200);
+    assert.equal((await response.json() as { image: string }).image, 'data:image/jpeg;base64,ZmFsbGJhY2s=');
     assert.equal(aiRun.mock.callCount(), 1);
   });
 
