@@ -13,6 +13,7 @@ import {
   spendGuestDailyQuota,
 } from './lib/credits';
 import { corsHeaders, json } from './lib/http';
+import { persistGeneratedImage } from './lib/image-storage';
 import { sanitizeText } from './lib/language';
 import { ensureConversation, saveMessage } from './lib/persistence';
 import { resolveAuth } from './lib/supabase-auth';
@@ -88,8 +89,6 @@ export default {
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
-      // Local tool failures are intentionally returned to Codex Pro as observations.
-      // The planner can diagnose and recover instead of stopping after the first error.
       return handleAgentPlan(request, env);
     }
 
@@ -248,13 +247,14 @@ export default {
 
         if (auth.kind === 'user' && conversationId) {
           try {
+            const storedImage = await persistGeneratedImage(env, auth.user.id, result.image);
             await saveMessage(
               env,
               conversationId,
               auth.user.id,
               'assistant',
               result.edited ? 'ویرایش تصویر آماده شد.' : 'تصویر آماده شد.',
-              result.image,
+              storedImage ?? undefined,
             );
           } catch (persistenceError) {
             console.error(JSON.stringify({
