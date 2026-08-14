@@ -32,6 +32,10 @@ on:
       - ".github/workflows/desktop-windows.yml"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build-windows:
     runs-on: windows-latest
