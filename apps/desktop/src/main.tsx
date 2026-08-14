@@ -7,6 +7,7 @@ import './styles/chat-v046.css';
 import './styles/commercial-v060.css';
 import './styles/chat-commercial-v060.css';
 import './styles/voice-commercial-v060.css';
+import './styles/image-studio-v060.css';
 
 type ThemeMode = 'dark' | 'light';
 const THEME_STORAGE_KEY = 'farsiai.theme';
