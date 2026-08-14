@@ -12,6 +12,10 @@ on:
       - "supabase/**"
       - ".github/workflows/database-ci.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   validate-migrations:
     runs-on: ubuntu-latest
