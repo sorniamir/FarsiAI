@@ -127,7 +127,7 @@ export function AuthScreen({ onDone, onGuest }: { onDone: () => void; onGuest: (
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background, paddingHorizontal: 24, justifyContent: 'center' },
-  brandOrb: { width: 68, height: 68, borderRadius: 24, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft, borderWidth: 1, borderColor: theme.colors.accentBorder, marginBottom: 10 },
+  brandOrb: { width: 68, height: 68, borderRadius: 24, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft, borderWidth: 1, borderColor: theme.colors.borderStrong, marginBottom: 10 },
   spark: { textAlign: 'center', color: theme.colors.primaryBright, fontSize: 38, lineHeight: 44 },
   eyebrow: { textAlign: 'center', color: theme.colors.primaryBright, fontSize: 10, fontWeight: '900', letterSpacing: 2.1, marginBottom: 7 },
   title: { color: theme.colors.text, textAlign: 'center', fontSize: 29, fontWeight: '900', writingDirection: 'rtl' },
@@ -148,7 +148,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   or: { color: theme.colors.textDim, fontSize: 12 },
   guest: { minHeight: 56, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center', paddingVertical: 9 },
-  guestText: { color: theme.colors.text, fontWeight: '850' },
+  guestText: { color: theme.colors.text, fontWeight: '800' },
   guestMeta: { color: theme.colors.textDim, fontSize: 10, marginTop: 2 },
   note: { color: theme.colors.textDim, textAlign: 'center', fontSize: 10, lineHeight: 17, marginTop: 13, paddingHorizontal: 8, writingDirection: 'rtl' },
 });
