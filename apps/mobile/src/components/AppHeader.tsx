@@ -13,19 +13,23 @@ const subtitles: Record<AppMode, string> = {
 export function AppHeader({ quota, mode }: { quota: DailyQuota; mode: AppMode }) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const quotaLabel = quota.unlimited
+    ? 'PRO · نامحدود'
+    : `${quota.chatRemaining} پیام · ${quota.imageRemaining} تصویر`;
+
   return (
     <View style={styles.header}>
       <View>
         <View style={styles.brandRow}>
           <View style={styles.logo}><Text style={styles.logoText}>✦</Text></View>
           <View style={styles.wordmark}><Text style={styles.brandFarsi}>Farsi</Text><Text style={styles.brandAi}>Ai</Text></View>
-          <View style={styles.beta}><Text style={styles.betaText}>BETA</Text></View>
+          <View style={styles.beta}><Text style={styles.betaText}>RC</Text></View>
         </View>
         <Text style={styles.subtitle}>{subtitles[mode]}</Text>
       </View>
-      <View style={styles.creditPill}>
-        <Text style={styles.creditIcon}>◆</Text>
-        <Text style={styles.creditText}>{quota.chatRemaining} پیام · {quota.imageRemaining} تصویر</Text>
+      <View style={[styles.creditPill, quota.unlimited && styles.proPill]}>
+        <Text style={[styles.creditIcon, quota.unlimited && styles.proIcon]}>◆</Text>
+        <Text style={[styles.creditText, quota.unlimited && styles.proText]}>{quotaLabel}</Text>
       </View>
     </View>
   );
@@ -48,13 +52,17 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOpacity: theme.mode === 'dark' ? 0.34 : 0.16,
+    shadowRadius: 14,
+    elevation: 5,
   },
   logoText: { color: theme.colors.onAccent, fontSize: 18, fontWeight: '900' },
   wordmark: { flexDirection: 'row', alignItems: 'baseline' },
   brandFarsi: { color: theme.colors.primaryBright, fontSize: 22, fontWeight: '900' },
   brandAi: { color: theme.mode === 'dark' ? '#FFFFFF' : '#000000', fontSize: 22, fontWeight: '900' },
   beta: { borderRadius: 8, backgroundColor: theme.colors.accentSoft, paddingHorizontal: 7, paddingVertical: 4 },
-  betaText: { color: theme.colors.cyan, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  betaText: { color: theme.colors.cyan, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   subtitle: { color: theme.colors.textMuted, fontSize: 12, marginTop: 6, textAlign: 'right' },
   creditPill: {
     flexDirection: 'row',
@@ -67,6 +75,9 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     paddingVertical: 9,
     borderRadius: theme.radius.pill,
   },
+  proPill: { borderColor: theme.colors.borderStrong, backgroundColor: theme.colors.accentSoft },
   creditIcon: { color: theme.colors.warning, fontSize: 15 },
-  creditText: { color: theme.colors.text, fontWeight: '700' },
+  proIcon: { color: theme.colors.primaryBright },
+  creditText: { color: theme.colors.text, fontWeight: '700', fontSize: 11 },
+  proText: { color: theme.colors.primaryBright, fontWeight: '900' },
 });

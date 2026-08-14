@@ -12,6 +12,7 @@ import { AppHeader } from './src/components/AppHeader';
 import { BottomNav, type MainTab } from './src/components/BottomNav';
 import { ModeBar } from './src/components/ModeBar';
 import { createSessionFromUrl, getCurrentUserEmail, hasActiveSession, signOut } from './src/services/auth';
+import { getAccountPlan, type AccountPlan } from './src/services/account';
 import { DEFAULT_DAILY_QUOTA, getAuthenticatedQuota, getGuestQuota } from './src/services/quota';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
@@ -38,14 +39,21 @@ function AppContent() {
   const [isGuest, setIsGuest] = useState(false);
   const [quota, setQuota] = useState<DailyQuota>(DEFAULT_DAILY_QUOTA);
   const [userEmail, setUserEmail] = useState<string | undefined>();
+  const [accountPlan, setAccountPlan] = useState<AccountPlan>('free');
   const [conversationId, setConversationId] = useState<string | undefined>();
 
   useEffect(() => {
     hasActiveSession().then(async (active) => {
       if (!active) return;
+      const [email, nextQuota, nextPlan] = await Promise.all([
+        getCurrentUserEmail(),
+        getAuthenticatedQuota(),
+        getAccountPlan(),
+      ]);
       setIsGuest(false);
-      setUserEmail(await getCurrentUserEmail());
-      setQuota(await getAuthenticatedQuota());
+      setUserEmail(email);
+      setQuota(nextQuota);
+      setAccountPlan(nextPlan);
       setStage('app');
     });
   }, []);
@@ -61,18 +69,36 @@ function AppContent() {
     return () => subscription.remove();
   }, []);
 
+  useEffect(() => {
+    if (stage !== 'app' || isGuest || tab !== 'profile') return;
+    let mounted = true;
+    void Promise.all([getAuthenticatedQuota(), getAccountPlan()]).then(([nextQuota, nextPlan]) => {
+      if (!mounted) return;
+      setQuota(nextQuota);
+      setAccountPlan(nextPlan);
+    });
+    return () => { mounted = false; };
+  }, [stage, isGuest, tab]);
+
   async function enterAuthenticatedApp() {
+    const [email, nextQuota, nextPlan] = await Promise.all([
+      getCurrentUserEmail(),
+      getAuthenticatedQuota(),
+      getAccountPlan(),
+    ]);
     setIsGuest(false);
     setTab('chat');
     setConversationId(undefined);
-    setUserEmail(await getCurrentUserEmail());
-    setQuota(await getAuthenticatedQuota());
+    setUserEmail(email);
+    setQuota(nextQuota);
+    setAccountPlan(nextPlan);
     setStage('app');
   }
 
   function enterGuestApp() {
     setIsGuest(true);
     setUserEmail(undefined);
+    setAccountPlan('free');
     setQuota(getGuestQuota());
     setTab('chat');
     setConversationId(undefined);
@@ -101,6 +127,7 @@ function AppContent() {
     if (!isGuest) await signOut();
     setIsGuest(false);
     setUserEmail(undefined);
+    setAccountPlan('free');
     setQuota(DEFAULT_DAILY_QUOTA);
     setTab('chat');
     setMode('chat');
@@ -126,7 +153,7 @@ function AppContent() {
       ) : tab === 'history' ? (
         <HistoryScreen onOpenChat={(id) => { setConversationId(id); setTab('chat'); }} />
       ) : (
-        <ProfileScreen isGuest={isGuest} email={userEmail} quota={quota} onSignOut={exitAccount} />
+        <ProfileScreen isGuest={isGuest} email={userEmail} quota={quota} plan={accountPlan} onSignOut={exitAccount} />
       )}
 
       <BottomNav tab={tab} onChange={setTab} />
