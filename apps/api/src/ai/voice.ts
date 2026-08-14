@@ -4,13 +4,14 @@ import { resolveAuth } from '../lib/supabase-auth';
 import type { Env } from '../types';
 
 const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
-const CLOUDFLARE_TTS_MODEL = 'google/gemini-3.1-flash-tts';
+const DEFAULT_STT_MODEL = 'gemini-3.1-flash-lite';
 const DEFAULT_TTS_MODEL = 'gemini-3.1-flash-tts-preview';
 const FALLBACK_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const DEFAULT_TTS_VOICE = 'Kore';
 const MAX_BASE64_LENGTH = 10_500_000;
 const MAX_GENERATED_AUDIO_BASE64 = 14_000_000;
 const MAX_TTS_TEXT_LENGTH = 4000;
+const GEMINI_VOICE_TIMEOUT_MS = 60_000;
 const SUPPORTED_AUDIO_TYPES = new Set([
   'audio/webm',
   'audio/ogg',
@@ -74,11 +75,33 @@ function transcriptionText(result: unknown): string {
   return '';
 }
 
+function extractGeminiText(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const payload = value as Record<string, unknown>;
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const content = (candidate as Record<string, unknown>).content;
+    if (!content || typeof content !== 'object') continue;
+    const parts = Array.isArray((content as Record<string, unknown>).parts)
+      ? (content as Record<string, unknown>).parts as unknown[]
+      : [];
+    const text = parts
+      .map((part) => part && typeof part === 'object' && typeof (part as Record<string, unknown>).text === 'string'
+        ? String((part as Record<string, unknown>).text)
+        : '')
+      .join('\n')
+      .trim();
+    if (text) return sanitizeText(text, 6000);
+  }
+  return '';
+}
+
 function audioBlock(value: unknown, model: string): GeneratedAudio | null {
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
-  const data = typeof item.data === 'string' ? item.data.trim() : '';
-  if (!data || data.length > MAX_GENERATED_AUDIO_BASE64 || !/^[A-Za-z0-9+/\s]+={0,2}$/.test(data)) return null;
+  const data = typeof item.data === 'string' ? item.data.replace(/\s+/g, '').trim() : '';
+  if (!data || data.length > MAX_GENERATED_AUDIO_BASE64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return null;
   const mimeType = typeof item.mime_type === 'string'
     ? item.mime_type
     : typeof item.mimeType === 'string'
@@ -93,13 +116,9 @@ function extractGeneratedAudio(value: unknown, model: string): GeneratedAudio | 
   if (typeof payload.audio === 'string' && payload.audio.trim()) {
     const raw = payload.audio.trim();
     const dataUrl = raw.match(/^data:([^;,]+)(?:;[^,]*)?;base64,(.+)$/s);
-    const data = (dataUrl?.[2] ?? raw).trim();
-    if (!data || data.length > MAX_GENERATED_AUDIO_BASE64 || !/^[A-Za-z0-9+/\s]+={0,2}$/.test(data)) return null;
-    return {
-      data,
-      mimeType: dataUrl?.[1] ?? 'audio/wav',
-      model,
-    };
+    const data = (dataUrl?.[2] ?? raw).replace(/\s+/g, '').trim();
+    if (!data || data.length > MAX_GENERATED_AUDIO_BASE64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return null;
+    return { data, mimeType: dataUrl?.[1] ?? 'audio/wav', model };
   }
   const direct = audioBlock(payload.output_audio ?? payload.outputAudio, model);
   if (direct) return direct;
@@ -170,72 +189,101 @@ function audioAsWav(audio: GeneratedAudio): Uint8Array {
   return pcmToWav(bytes, Number.isFinite(rate) && rate >= 8000 && rate <= 96000 ? rate : 24000);
 }
 
-async function cloudflareGeminiTts(env: Env, text: string): Promise<GeneratedAudio | null> {
+async function geminiTranscribe(env: Env, audio: string, mimeType: string, language: string): Promise<{ text: string; model: string } | null> {
+  const apiKey = env.GEMINI_API_KEY?.trim();
+  if (!apiKey) return null;
+  const model = DEFAULT_STT_MODEL;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort('gemini-stt-timeout'), GEMINI_VOICE_TIMEOUT_MS);
   try {
-    const result = await env.AI.run(CLOUDFLARE_TTS_MODEL, {
-      text,
-      voice: env.GEMINI_TTS_VOICE?.trim() || DEFAULT_TTS_VOICE,
-      temperature: 0.25,
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: `Transcribe the supplied audio verbatim. Return only the transcript, with normal punctuation. The expected language is ${language || 'fa'}. Do not answer or summarize the speech.` },
+          { inlineData: { mimeType, data: audio } },
+        ] }],
+        generationConfig: { temperature: 0 },
+      }),
     });
-    return extractGeneratedAudio(result, CLOUDFLARE_TTS_MODEL);
+    if (!response.ok) {
+      console.warn(JSON.stringify({ event: 'gemini_stt_failed', status: response.status, model }));
+      return null;
+    }
+    const text = extractGeminiText(await response.json());
+    return text ? { text, model } : null;
   } catch (error) {
     console.warn(JSON.stringify({
-      event: 'cloudflare_gemini_tts_failed',
-      model: CLOUDFLARE_TTS_MODEL,
-      message: error instanceof Error ? error.message : 'unknown_cloudflare_tts_error',
+      event: 'gemini_stt_exception',
+      model,
+      message: error instanceof Error ? error.message : 'unknown_gemini_stt_error',
+    }));
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function workersTranscribe(env: Env, audio: string, language: string): Promise<{ text: string; model: string } | null> {
+  try {
+    const result = await env.AI.run(WHISPER_MODEL, {
+      audio,
+      task: 'transcribe',
+      language,
+      vad_filter: true,
+      initial_prompt: 'گفت‌وگوی طبیعی فارسی با علائم نگارشی صحیح.',
+    });
+    const text = transcriptionText(result);
+    return text ? { text, model: WHISPER_MODEL } : null;
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'workers_whisper_failed',
+      model: WHISPER_MODEL,
+      message: error instanceof Error ? error.message : 'unknown_whisper_error',
     }));
     return null;
   }
 }
 
-async function geminiInteractionTts(env: Env, text: string): Promise<GeneratedAudio | null> {
-  const model = env.GEMINI_TTS_MODEL?.trim() || DEFAULT_TTS_MODEL;
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-goog-api-key': env.GEMINI_API_KEY!,
-      'api-revision': '2026-05-20',
-    },
-    body: JSON.stringify({
-      model,
-      input: `Generate speech only. Speak naturally in fluent Persian (fa-IR), warm and clear, at a conversational pace. Do not add or remove words.\n\nTranscript:\n${text}`,
-      response_format: { type: 'audio' },
-      generation_config: {
-        speech_config: [{ voice: env.GEMINI_TTS_VOICE?.trim() || DEFAULT_TTS_VOICE }],
-      },
-    }),
-  });
-  if (!response.ok) {
-    console.warn(JSON.stringify({ event: 'gemini_tts_interaction_failed', status: response.status, model }));
-    return null;
-  }
-  return extractGeneratedAudio(await response.json(), model);
-}
-
-async function geminiGenerateContentTts(env: Env, text: string): Promise<GeneratedAudio | null> {
-  const model = FALLBACK_TTS_MODEL;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-goog-api-key': env.GEMINI_API_KEY!,
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: `با صدایی طبیعی، گرم و واضح و با سرعت مکالمه‌ای، فقط متن زیر را به فارسی بخوان و چیزی به آن اضافه یا از آن کم نکن:\n\n${text}` }] }],
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: env.GEMINI_TTS_VOICE?.trim() || DEFAULT_TTS_VOICE } },
+async function geminiGenerateContentTts(env: Env, text: string, model: string): Promise<GeneratedAudio | null> {
+  const apiKey = env.GEMINI_API_KEY?.trim();
+  if (!apiKey) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort('gemini-tts-timeout'), GEMINI_VOICE_TIMEOUT_MS);
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `با صدایی طبیعی، گرم و واضح و با سرعت مکالمه‌ای، فقط متن زیر را به فارسی بخوان و چیزی به آن اضافه یا از آن کم نکن:\n\n${text}` }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: env.GEMINI_TTS_VOICE?.trim() || DEFAULT_TTS_VOICE } },
+          },
         },
-      },
-    }),
-  });
-  if (!response.ok) {
-    console.warn(JSON.stringify({ event: 'gemini_tts_generate_content_failed', status: response.status, model }));
+      }),
+    });
+    if (!response.ok) {
+      console.warn(JSON.stringify({ event: 'gemini_tts_failed', status: response.status, model }));
+      return null;
+    }
+    const generated = extractGeneratedAudio(await response.json(), model);
+    if (!generated) console.warn(JSON.stringify({ event: 'gemini_tts_empty_audio', model }));
+    return generated;
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'gemini_tts_exception',
+      model,
+      message: error instanceof Error ? error.message : 'unknown_gemini_tts_error',
+    }));
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
-  return extractGeneratedAudio(await response.json(), model);
 }
 
 export async function handleVoiceTranscription(request: Request, env: Env): Promise<Response> {
@@ -270,21 +318,19 @@ export async function handleVoiceTranscription(request: Request, env: Env): Prom
     return json(env, { ok: false, error: 'تعداد درخواست‌های صوتی زیاد شده؛ چند لحظه بعد دوباره تلاش کنید.', code: 'VOICE_RATE_LIMITED', requestId }, 429);
   }
 
+  const language = typeof payload.language === 'string' && payload.language.trim()
+    ? payload.language.trim().slice(0, 12)
+    : 'fa';
+
   try {
-    const result = await env.AI.run(WHISPER_MODEL, {
-      audio,
-      task: 'transcribe',
-      language: typeof payload.language === 'string' && payload.language.trim() ? payload.language.trim().slice(0, 12) : 'fa',
-      vad_filter: true,
-      initial_prompt: 'گفت‌وگوی طبیعی فارسی با علائم نگارشی صحیح.',
-    });
-    const text = transcriptionText(result);
-    if (!text) {
-      return json(env, { ok: false, error: 'گفتار واضحی در صدای ضبط‌شده تشخیص داده نشد؛ کمی نزدیک‌تر به میکروفن صحبت کنید.', code: 'VOICE_NO_SPEECH', requestId }, 422);
+    const transcription = await geminiTranscribe(env, audio, mimeType, language)
+      ?? await workersTranscribe(env, audio, language);
+    if (!transcription?.text) {
+      return json(env, { ok: false, error: 'گفتار واضحی در صدای ضبط‌شده تشخیص داده نشد یا سرویس گفتار موقتاً پاسخ نداد؛ دوباره تلاش کنید.', code: 'VOICE_NO_SPEECH', requestId }, 422);
     }
 
-    console.log(JSON.stringify({ event: 'voice_transcription_success', requestId, model: WHISPER_MODEL, characters: text.length, authenticated: access.authenticated }));
-    return json(env, { ok: true, text, model: WHISPER_MODEL, requestId });
+    console.log(JSON.stringify({ event: 'voice_transcription_success', requestId, model: transcription.model, characters: transcription.text.length, authenticated: access.authenticated }));
+    return json(env, { ok: true, text: transcription.text, model: transcription.model, requestId });
   } catch (error) {
     console.error(JSON.stringify({
       event: 'voice_transcription_error',
@@ -317,11 +363,15 @@ export async function handleVoiceSynthesis(request: Request, env: Env): Promise<
   }
 
   try {
-    const audio = await cloudflareGeminiTts(env, text)
-      ?? (env.GEMINI_API_KEY ? await geminiInteractionTts(env, text) : null)
-      ?? (env.GEMINI_API_KEY ? await geminiGenerateContentTts(env, text) : null);
+    const primaryModel = env.GEMINI_TTS_MODEL?.trim() || DEFAULT_TTS_MODEL;
+    const audio = await geminiGenerateContentTts(env, text, primaryModel)
+      ?? (primaryModel === FALLBACK_TTS_MODEL ? null : await geminiGenerateContentTts(env, text, FALLBACK_TTS_MODEL));
     if (!audio) {
-      return json(env, { ok: false, error: 'ساخت پاسخ صوتی موقتاً ناموفق بود؛ دوباره تلاش کنید.', code: 'VOICE_TTS_FAILED', requestId }, 502);
+      const code = env.GEMINI_API_KEY ? 'VOICE_TTS_PROVIDER_FAILED' : 'VOICE_TTS_UNCONFIGURED';
+      const error = env.GEMINI_API_KEY
+        ? 'ساخت پاسخ صوتی موقتاً ناموفق بود؛ دوباره تلاش کنید.'
+        : 'کلید سرویس صدای فارسی روی سرور تنظیم نشده است.';
+      return json(env, { ok: false, error, code, requestId }, 502);
     }
     const wav = audioAsWav(audio);
     const body = new Uint8Array(wav.byteLength);
