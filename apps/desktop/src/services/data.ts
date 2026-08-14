@@ -131,10 +131,12 @@ export async function getAccountSnapshot(): Promise<AccountSnapshot> {
     supabase.from('profiles').select('display_name,plan').single(),
   ]);
 
+  const rawPlan = profile?.plan;
+  const plan: AccountSnapshot['plan'] = rawPlan === 'pro' || rawPlan === 'admin' ? rawPlan : 'free';
   return {
     email: authData.user?.email ?? undefined,
     displayName: profile?.display_name ? String(profile.display_name) : undefined,
-    plan: (profile?.plan ?? 'free') as AccountSnapshot['plan'],
+    plan,
   };
 }
 
@@ -143,16 +145,23 @@ export async function getCurrentDailyQuota(): Promise<DailyQuota> {
   if (!supabase) return full;
 
   const today = new Date().toISOString().slice(0, 10);
-  const { data, error } = await supabase
-    .from('daily_usage')
-    .select('chat_used,image_used')
-    .eq('usage_date', today)
-    .maybeSingle();
+  const [{ data: profile }, { data: usage, error }] = await Promise.all([
+    supabase.from('profiles').select('plan').maybeSingle(),
+    supabase
+      .from('daily_usage')
+      .select('chat_used,image_used')
+      .eq('usage_date', today)
+      .maybeSingle(),
+  ]);
 
-  if (error || !data) return full;
+  if (profile?.plan === 'pro' || profile?.plan === 'admin') {
+    return { chatRemaining: 999999, imageRemaining: 999999, unlimited: true };
+  }
+
+  if (error || !usage) return full;
   return {
-    chatRemaining: Math.max(0, 10 - Number(data.chat_used ?? 0)),
-    imageRemaining: Math.max(0, 4 - Number(data.image_used ?? 0)),
+    chatRemaining: Math.max(0, 10 - Number(usage.chat_used ?? 0)),
+    imageRemaining: Math.max(0, 4 - Number(usage.image_used ?? 0)),
   };
 }
 
