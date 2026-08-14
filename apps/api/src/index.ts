@@ -6,6 +6,7 @@ import { runImage } from './ai/image';
 import { handleVoiceSynthesis, handleVoiceTranscription } from './ai/voice';
 import { handleAdminRequest } from './admin';
 import { renderAdminPanel } from './admin-ui';
+import { renderPasswordRecovery } from './auth-recovery-ui';
 import {
   refundDailyQuota,
   refundGuestDailyQuota,
@@ -74,6 +75,10 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
+    }
+
+    if (request.method === 'GET' && (url.pathname === '/auth/recovery' || url.pathname === '/auth/recovery/')) {
+      return renderPasswordRecovery(env);
     }
 
     if (request.method === 'GET' && (url.pathname === '/admin' || url.pathname === '/admin/')) {
