@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { AccountRecoveryLauncher } from './components/AccountRecoveryLauncher';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/globals.css';
 import './styles/codex-studio.css';
@@ -10,6 +11,7 @@ import './styles/chat-commercial-v060.css';
 import './styles/voice-commercial-v060.css';
 import './styles/image-studio-v060.css';
 import './styles/recovery-commercial-v060.css';
+import './styles/account-recovery-v060.css';
 
 type ThemeMode = 'dark' | 'light';
 const THEME_STORAGE_KEY = 'farsiai.theme';
@@ -34,6 +36,7 @@ function ThemedApp() {
   return (
     <>
       <App />
+      <AccountRecoveryLauncher />
       <button
         type="button"
         className="global-theme-toggle"
