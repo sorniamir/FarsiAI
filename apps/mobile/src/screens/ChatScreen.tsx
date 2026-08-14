@@ -219,7 +219,7 @@ export function ChatScreen({
     if (!message || loading) return;
 
     const remaining = mode === 'chat' ? quota.chatRemaining : quota.imageRemaining;
-    if (remaining <= 0) {
+    if (!quota.unlimited && remaining <= 0) {
       setMessages((current) => [...current, {
         id: `${Date.now()}-limit`,
         role: 'assistant',
@@ -308,6 +308,9 @@ export function ChatScreen({
   }
 
   const canSend = !loading && (input.trim().length > 0 || (mode === 'chat' && attachments.length > 0));
+  const quotaLabel = quota.unlimited
+    ? 'Premium · نامحدود'
+    : `${mode === 'chat' ? quota.chatRemaining : quota.imageRemaining} باقی‌مانده`;
 
   return (
     <View style={styles.wrap}>
@@ -326,7 +329,7 @@ export function ChatScreen({
       <View style={styles.composerWrap}>
         {replyTarget?.image ? (
           <View style={styles.replyBar}>
-            <Pressable onPress={() => setReplyTarget(null)} style={styles.replyClose}><Text style={styles.close}>×</Text></Pressable>
+            <Pressable onPress={() => setReplyTarget(null)} style={({ pressed }) => [styles.replyClose, pressed && styles.pressed]}><Text style={styles.close}>×</Text></Pressable>
             <View style={styles.replyTextWrap}>
               <Text style={styles.replyTitle}>ویرایش همین تصویر</Text>
               <Text style={styles.replyText}>درخواست بعدی فقط روی این تصویر اعمال می‌شود.</Text>
@@ -345,7 +348,7 @@ export function ChatScreen({
                   <View style={styles.pendingFile}><Text style={styles.pendingFileText}>FILE</Text></View>
                 )}
                 <Text numberOfLines={1} style={styles.pendingName}>{attachment.name}</Text>
-                <Pressable onPress={() => removeAttachment(attachment.id)} style={styles.pendingRemove}><Text style={styles.pendingRemoveText}>×</Text></Pressable>
+                <Pressable onPress={() => removeAttachment(attachment.id)} style={({ pressed }) => [styles.pendingRemove, pressed && styles.pressed]}><Text style={styles.pendingRemoveText}>×</Text></Pressable>
               </View>
             ))}
           </ScrollView>
@@ -358,24 +361,32 @@ export function ChatScreen({
           </View>
         ) : null}
 
+        <View style={styles.composerMeta}>
+          <View style={styles.modelBadge}><View style={styles.modelDot} /><Text style={styles.modelText}>FarsiAI Intelligence</Text></View>
+          <Text style={[styles.quotaMini, quota.unlimited && styles.quotaMiniPro]}>{quotaLabel}</Text>
+        </View>
+
         <View style={styles.composer}>
-          <Pressable style={styles.plus} onPress={openAttachmentMenu} disabled={loading}>
+          <Pressable style={({ pressed }) => [styles.plus, pressed && styles.pressed]} onPress={openAttachmentMenu} disabled={loading} accessibilityLabel="افزودن فایل یا تصویر">
             <Text style={styles.plusText}>＋</Text>
           </Pressable>
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder={mode === 'image' ? 'تصویری که می‌خواهی را توصیف کن…' : 'پیام بنویس یا فایل اضافه کن…'}
+            placeholder={mode === 'image' ? 'صحنه، سبک و جزئیات تصویر را بنویس…' : 'هر چیزی بپرس یا فایل اضافه کن…'}
             placeholderTextColor={theme.colors.textDim}
             style={styles.input}
             multiline
             textAlign="right"
+            maxLength={6000}
+            autoCorrect
+            selectionColor={theme.colors.primaryBright}
           />
-          <Pressable style={[styles.send, !canSend && styles.disabled]} disabled={!canSend} onPress={() => submit()}>
-            {loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendText}>↑</Text>}
+          <Pressable style={({ pressed }) => [styles.send, mode === 'image' && styles.sendImage, !canSend && styles.disabled, pressed && canSend && styles.sendPressed]} disabled={!canSend} onPress={() => submit()} accessibilityLabel="ارسال پیام">
+            {loading ? <ActivityIndicator size="small" color={theme.colors.onAccent} /> : <Text style={styles.sendText}>↑</Text>}
           </Pressable>
         </View>
-        <Text style={styles.disclaimer}>ویرایش تصویر فقط با ریپلای یا ضمیمه‌کردن تصویر انجام می‌شود.</Text>
+        <Text style={styles.disclaimer}>{mode === 'image' ? 'Edit فقط با تصویر انتخاب‌شده انجام می‌شود؛ تصویر قبلی خودکار استفاده نمی‌شود.' : 'FarsiAI ممکن است اشتباه کند؛ خروجی‌های مهم را بررسی کنید.'}</Text>
       </View>
     </View>
   );
@@ -386,12 +397,12 @@ function EmptyState({ mode, onSelect }: { mode: 'chat' | 'image'; onSelect: (val
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.empty}>
-      <View style={styles.heroOrb}><Text style={styles.heroOrbText}>{mode === 'image' ? '▧' : '✦'}</Text></View>
+      <View style={styles.heroGlow}><View style={styles.heroOrb}><Text style={styles.heroOrbText}>{mode === 'image' ? '▧' : '✦'}</Text></View></View>
       <Text style={styles.heroTitle}>{mode === 'image' ? 'ایده‌ات را به تصویر تبدیل کن' : 'چطور می‌تونم کمکت کنم؟'}</Text>
-      <Text style={styles.heroBody}>{mode === 'image' ? 'صحنه، سبک و جزئیات موردنظرت را فارسی بنویس.' : 'سؤال، ایده یا فایل موردنظرت را ارسال کن.'}</Text>
+      <Text style={styles.heroBody}>{mode === 'image' ? 'صحنه، سبک و جزئیات موردنظرت را فارسی بنویس.' : 'گفتگو، تحلیل فایل، ایده‌پردازی و پاسخ حرفه‌ای در یک محیط.'}</Text>
       <View style={styles.starters}>
         {STARTERS.map((item) => (
-          <Pressable key={item} style={styles.starter} onPress={() => onSelect(item)}>
+          <Pressable key={item} style={({ pressed }) => [styles.starter, pressed && styles.starterPressed]} onPress={() => onSelect(item)}>
             <Text style={styles.starterText}>{item}</Text><Text style={styles.arrow}>‹</Text>
           </Pressable>
         ))}
@@ -405,8 +416,8 @@ function Typing({ mode }: { mode: 'chat' | 'image' }) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   return (
     <View style={styles.typing}>
-      <ActivityIndicator size="small" color={theme.colors.primaryBright} />
-      <Text style={styles.typingText}>{mode === 'image' ? 'در حال پردازش تصویر…' : 'در حال فکر کردن…'}</Text>
+      <View style={styles.typingOrb}><ActivityIndicator size="small" color={theme.colors.primaryBright} /></View>
+      <View><Text style={styles.typingTitle}>FarsiAI</Text><Text style={styles.typingText}>{mode === 'image' ? 'در حال پردازش تصویر…' : 'در حال آماده‌سازی پاسخ…'}</Text></View>
     </View>
   );
 }
@@ -416,40 +427,53 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   list: { paddingHorizontal: 14, paddingTop: 24, paddingBottom: 20, gap: 16 },
   emptyList: { flexGrow: 1, justifyContent: 'center' },
   empty: { paddingHorizontal: 24, alignItems: 'center', paddingBottom: 30 },
-  heroOrb: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft, borderWidth: 1, borderColor: theme.colors.primary, marginBottom: 20 },
-  heroOrbText: { color: theme.colors.primaryBright, fontSize: 28, fontWeight: '900' },
-  heroTitle: { color: theme.colors.text, fontSize: 25, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
-  heroBody: { color: theme.colors.textMuted, lineHeight: 23, fontSize: 14, textAlign: 'center', maxWidth: 330 },
+  heroGlow: { width: 92, height: 92, borderRadius: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surfaceSoft, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 19, shadowColor: theme.colors.primary, shadowOpacity: theme.mode === 'dark' ? 0.38 : 0.14, shadowRadius: 24, elevation: 6 },
+  heroOrb: { width: 68, height: 68, borderRadius: 25, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft, borderWidth: 1, borderColor: theme.colors.primary },
+  heroOrbText: { color: theme.colors.primaryBright, fontSize: 27, fontWeight: '900' },
+  heroTitle: { color: theme.colors.text, fontSize: 25, fontWeight: '900', marginBottom: 10, textAlign: 'center' },
+  heroBody: { color: theme.colors.textMuted, lineHeight: 23, fontSize: 13, textAlign: 'center', maxWidth: 340 },
   starters: { width: '100%', marginTop: 28, gap: 10 },
-  starter: { minHeight: 58, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, paddingHorizontal: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  starterText: { color: theme.colors.text, fontSize: 13, textAlign: 'right', flex: 1 },
-  arrow: { color: theme.colors.textDim, fontSize: 22, marginRight: 10 },
-  typing: { marginHorizontal: 14, marginBottom: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  typingText: { color: theme.colors.textMuted, fontSize: 12 },
-  composerWrap: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, backgroundColor: theme.colors.background },
-  replyBar: { marginBottom: 8, minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 8, borderRadius: 15, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.surfaceRaised },
-  replyClose: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surfaceSoft },
-  replyImage: { width: 46, height: 46, borderRadius: 10, backgroundColor: theme.colors.surfaceSoft },
+  starter: { minHeight: 60, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, paddingHorizontal: 16, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  starterPressed: { opacity: 0.78, transform: [{ scale: 0.99 }], borderColor: theme.colors.borderStrong },
+  starterText: { color: theme.colors.text, fontSize: 13, textAlign: 'right', flex: 1, fontWeight: '600' },
+  arrow: { color: theme.colors.primaryBright, fontSize: 22, marginRight: 10 },
+  typing: { marginHorizontal: 14, marginBottom: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 15, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+  typingOrb: { width: 30, height: 30, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft },
+  typingTitle: { color: theme.colors.text, textAlign: 'right', fontSize: 10, fontWeight: '900' },
+  typingText: { color: theme.colors.textMuted, fontSize: 10, marginTop: 2 },
+  composerWrap: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, backgroundColor: theme.colors.background, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  replyBar: { marginBottom: 8, minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 8, borderRadius: 17, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.surfaceRaised },
+  replyClose: { width: 28, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surfaceSoft },
+  replyImage: { width: 46, height: 46, borderRadius: 11, backgroundColor: theme.colors.surfaceSoft },
   replyTextWrap: { flex: 1 },
-  replyTitle: { color: theme.colors.primaryBright, fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  replyTitle: { color: theme.colors.primaryBright, fontSize: 12, fontWeight: '900', textAlign: 'right' },
   replyText: { color: theme.colors.textMuted, fontSize: 10, marginTop: 3, textAlign: 'right' },
   attachmentStrip: { flexDirection: 'row-reverse', gap: 8, paddingBottom: 8 },
-  pendingAttachment: { width: 112, minHeight: 72, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised, padding: 7, position: 'relative' },
-  pendingImage: { width: '100%', height: 58, borderRadius: 9, backgroundColor: theme.colors.surfaceSoft },
-  pendingFile: { height: 58, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft },
+  pendingAttachment: { width: 112, minHeight: 72, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised, padding: 7, position: 'relative' },
+  pendingImage: { width: '100%', height: 58, borderRadius: 10, backgroundColor: theme.colors.surfaceSoft },
+  pendingFile: { height: 58, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.accentSoft },
   pendingFileText: { color: theme.colors.primaryBright, fontSize: 10, fontWeight: '900' },
   pendingName: { color: theme.colors.textMuted, fontSize: 9, marginTop: 5, textAlign: 'center' },
-  pendingRemove: { position: 'absolute', top: 3, right: 3, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)' },
+  pendingRemove: { position: 'absolute', top: 3, right: 3, width: 22, height: 22, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.76)' },
   pendingRemoveText: { color: '#fff', fontSize: 15, lineHeight: 17 },
-  modeHint: { alignSelf: 'flex-end', marginBottom: 7, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: theme.colors.accentSoft },
-  modeHintText: { color: theme.colors.primaryBright, fontSize: 11, fontWeight: '700' },
+  modeHint: { alignSelf: 'flex-end', marginBottom: 7, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 12, backgroundColor: theme.colors.accentSoft, borderWidth: 1, borderColor: theme.colors.borderStrong },
+  modeHintText: { color: theme.colors.primaryBright, fontSize: 10, fontWeight: '800' },
   close: { color: theme.colors.textMuted, fontSize: 17 },
-  composer: { minHeight: 58, maxHeight: 140, borderRadius: 24, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceRaised, padding: 7, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  plus: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.surfaceSoft, alignItems: 'center', justifyContent: 'center' },
+  composerMeta: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 5, marginBottom: 7 },
+  modelBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  modelDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primaryBright },
+  modelText: { color: theme.colors.textMuted, fontSize: 9, fontWeight: '800' },
+  quotaMini: { color: theme.colors.textDim, fontSize: 9, fontWeight: '700' },
+  quotaMiniPro: { color: theme.colors.primaryBright, fontWeight: '900' },
+  composer: { minHeight: 62, maxHeight: 156, borderRadius: 23, borderWidth: 1, borderColor: theme.colors.borderStrong, backgroundColor: theme.colors.surfaceRaised, padding: 8, flexDirection: 'row', alignItems: 'flex-end', gap: 8, shadowColor: theme.colors.shadow, shadowOpacity: theme.mode === 'dark' ? 0.32 : 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
+  plus: { width: 42, height: 42, borderRadius: 15, backgroundColor: theme.colors.surfaceSoft, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   plusText: { color: theme.colors.text, fontSize: 20, fontWeight: '500' },
-  input: { flex: 1, minHeight: 42, maxHeight: 120, paddingHorizontal: 8, paddingVertical: 10, color: theme.colors.text, fontSize: 14, lineHeight: 20 },
-  send: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  disabled: { opacity: 0.35 },
-  sendText: { color: theme.colors.onAccent, fontSize: 22, fontWeight: '700', marginTop: -2 },
-  disclaimer: { color: theme.colors.textDim, fontSize: 9, textAlign: 'center', marginTop: 7 },
+  input: { flex: 1, minHeight: 42, maxHeight: 132, paddingHorizontal: 8, paddingVertical: 10, color: theme.colors.text, fontSize: 14, lineHeight: 21 },
+  send: { width: 44, height: 44, borderRadius: 15, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.primary, shadowOpacity: theme.mode === 'dark' ? 0.34 : 0.16, shadowRadius: 10, elevation: 4 },
+  sendImage: { borderRadius: 14 },
+  sendPressed: { transform: [{ scale: 0.95 }], opacity: 0.86 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
+  disabled: { opacity: 0.28, shadowOpacity: 0 },
+  sendText: { color: theme.colors.onAccent, fontSize: 22, fontWeight: '900', marginTop: -2 },
+  disclaimer: { color: theme.colors.textDim, fontSize: 8.5, textAlign: 'center', marginTop: 7, lineHeight: 13 },
 });
