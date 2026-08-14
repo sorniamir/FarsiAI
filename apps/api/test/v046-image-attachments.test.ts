@@ -18,12 +18,8 @@ function envWithAi(ai: Env['AI']): Env {
 function installGuestQuotaFetch() {
   globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.endsWith('/rpc/use_guest_daily_quota')) {
-      return Response.json({ chatRemaining: 5, imageRemaining: 1 });
-    }
-    if (url.endsWith('/rpc/refund_guest_daily_quota')) {
-      return Response.json({ chatRemaining: 5, imageRemaining: 2 });
-    }
+    if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
+    if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
@@ -47,7 +43,7 @@ describe('v0.4.6 image and attachment contract', () => {
     const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
       assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
       assert.equal('image_b64' in input, false);
-      assert.equal(input.steps, 8);
+      assert.equal(input.steps, 4);
       return { image: 'YWJj' };
     });
     const env = envWithAi({ run: aiRun });
@@ -89,17 +85,16 @@ describe('v0.4.6 image and attachment contract', () => {
     assert.equal(aiRun.mock.callCount(), 1);
   });
 
-  it('uses Gemini generateContent image bytes directly when Nano Banana succeeds', async () => {
+  it('uses the official Gemini Interactions image response when Nano Banana succeeds', async () => {
     const aiRun = mock.fn(async () => ({ image: 'unused' }));
     const env = { ...envWithAi({ run: aiRun }), GEMINI_API_KEY: 'test-gemini-key' };
     globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes('generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent')) {
-        const body = JSON.parse(String(init?.body ?? '{}')) as { generationConfig?: { responseModalities?: string[] } };
-        assert.deepEqual(body.generationConfig?.responseModalities, ['IMAGE']);
-        return Response.json({
-          candidates: [{ content: { parts: [{ inlineData: { data: 'YWJjZA==', mimeType: 'image/png' } }] } }],
-        });
+      if (url.includes('generativelanguage.googleapis.com/v1beta/interactions')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { model?: string; response_format?: { type?: string } };
+        assert.equal(body.model, 'gemini-3.1-flash-image');
+        assert.equal(body.response_format?.type, 'image');
+        return Response.json({ output_image: { data: 'YWJjZA==', mime_type: 'image/png' } });
       }
       if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
       if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
@@ -120,18 +115,16 @@ describe('v0.4.6 image and attachment contract', () => {
     assert.equal(aiRun.mock.callCount(), 0);
   });
 
-  it('falls back to Workers AI when both Gemini image routes fail', async () => {
+  it('falls back to Workers AI when Gemini image generation is unavailable', async () => {
     const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
       assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
-      assert.equal(input.steps, 8);
+      assert.equal(input.steps, 4);
       return { image: 'ZmFsbGJhY2s=' };
     });
     const env = { ...envWithAi({ run: aiRun }), GEMINI_API_KEY: 'test-gemini-key' };
     globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('generativelanguage.googleapis.com/')) {
-        return new Response('provider unavailable', { status: 503 });
-      }
+      if (url.includes('generativelanguage.googleapis.com/')) return new Response('provider unavailable', { status: 503 });
       if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
       if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
       throw new Error(`Unexpected fetch: ${url}`);
@@ -192,14 +185,33 @@ describe('v0.4.6 image and attachment contract', () => {
     assert.equal(aiRun.mock.callCount(), 2);
   });
 
+  it('uses DreamShaper when FLUX and SDXL are both unavailable', async () => {
+    installGuestQuotaFetch();
+    const aiRun = mock.fn(async (model: string) => {
+      if (model === '@cf/black-forest-labs/flux-1-schnell') throw new Error('flux unavailable');
+      if (model === '@cf/bytedance/stable-diffusion-xl-lightning') throw new Error('sdxl unavailable');
+      if (model === '@cf/lykon/dreamshaper-8-lcm') return new Uint8Array([5, 6, 7, 8]);
+      throw new Error(`Unexpected model: ${model}`);
+    });
+    const env = envWithAi({ run: aiRun });
+
+    const response = await worker.fetch(request({
+      mode: 'image',
+      message: 'last resort image',
+      imageAction: 'generate',
+    }), env);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as { image: string; provider?: string };
+    assert.equal(payload.image, 'data:image/png;base64,BQYHCA==');
+    assert.equal(payload.provider, '@cf/lykon/dreamshaper-8-lcm');
+    assert.equal(aiRun.mock.callCount(), 3);
+  });
+
   it('rejects edit mode when no explicit image reference exists', async () => {
     const aiRun = mock.fn(async () => ({ image: 'unused' }));
     const env = envWithAi({ run: aiRun });
-    const response = await worker.fetch(request({
-      mode: 'image',
-      message: 'edit it',
-      imageAction: 'edit',
-    }), env);
+    const response = await worker.fetch(request({ mode: 'image', message: 'edit it', imageAction: 'edit' }), env);
 
     assert.equal(response.status, 400);
     assert.match((await response.json() as { error: string }).error, /ریپلای|ضمیمه/);
@@ -214,21 +226,13 @@ describe('v0.4.6 image and attachment contract', () => {
       assert.match(messages.at(-1)?.content ?? '', /گزارش تست/);
       return { response: 'فایل بررسی شد.' };
     });
-    const toMarkdown = mock.fn(async () => ({
-      name: 'report.txt',
-      format: 'text' as const,
-      data: 'گزارش تست',
-    }));
+    const toMarkdown = mock.fn(async () => ({ name: 'report.txt', format: 'text' as const, data: 'گزارش تست' }));
     const env = envWithAi({ run: aiRun, toMarkdown });
 
     const response = await worker.fetch(request({
       mode: 'chat',
       message: 'این فایل را بررسی کن',
-      attachments: [{
-        name: 'report.txt',
-        mimeType: 'text/plain',
-        dataUrl: `data:text/plain;base64,${btoa('test report')}`,
-      }],
+      attachments: [{ name: 'report.txt', mimeType: 'text/plain', dataUrl: `data:text/plain;base64,${btoa('test report')}` }],
     }), env);
 
     assert.equal(response.status, 200);
@@ -247,11 +251,7 @@ describe('v0.4.6 image and attachment contract', () => {
     const response = await worker.fetch(request({
       mode: 'chat',
       message: 'open this',
-      attachments: [{
-        name: 'archive.zip',
-        mimeType: 'application/zip',
-        dataUrl: 'data:application/zip;base64,AA==',
-      }],
+      attachments: [{ name: 'archive.zip', mimeType: 'application/zip', dataUrl: 'data:application/zip;base64,AA==' }],
     }), env);
 
     assert.equal(response.status, 400);
