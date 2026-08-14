@@ -69,6 +69,10 @@ export async function persistGeneratedImage(
   }
 
   const path = storagePath(userId, parsed.extension);
+  const blobBuffer = parsed.bytes.buffer.slice(
+    parsed.bytes.byteOffset,
+    parsed.bytes.byteOffset + parsed.bytes.byteLength,
+  ) as ArrayBuffer;
   const response = await supabaseStorageAdminFetch(env, `object/${GENERATED_IMAGE_BUCKET}/${encodeStoragePath(path)}`, {
     method: 'POST',
     headers: {
@@ -76,7 +80,7 @@ export async function persistGeneratedImage(
       'cache-control': '3600',
       'x-upsert': 'false',
     },
-    body: new Blob([parsed.bytes], { type: parsed.mimeType }),
+    body: new Blob([blobBuffer], { type: parsed.mimeType }),
   });
 
   if (!response?.ok) {
