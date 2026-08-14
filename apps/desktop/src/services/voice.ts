@@ -36,6 +36,69 @@ function blobAsBase64(blob: Blob): Promise<string> {
   });
 }
 
+function wavBlob(buffer: AudioBuffer): Blob {
+  const sampleRate = Math.max(8000, Math.min(96000, Math.round(buffer.sampleRate || 48000)));
+  const frames = buffer.length;
+  const bytes = new Uint8Array(44 + frames * 2);
+  const view = new DataView(bytes.buffer);
+  const write = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) bytes[offset + index] = value.charCodeAt(index);
+  };
+
+  write(0, 'RIFF');
+  view.setUint32(4, 36 + frames * 2, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, 'data');
+  view.setUint32(40, frames * 2, true);
+
+  const channels = Math.max(1, buffer.numberOfChannels);
+  const channelData = Array.from({ length: channels }, (_, index) => buffer.getChannelData(index));
+  let target = 44;
+  for (let frame = 0; frame < frames; frame += 1) {
+    let mixed = 0;
+    for (let channel = 0; channel < channels; channel += 1) mixed += channelData[channel][frame] || 0;
+    mixed /= channels;
+    const clamped = Math.max(-1, Math.min(1, mixed));
+    const sample = clamped < 0 ? Math.round(clamped * 0x8000) : Math.round(clamped * 0x7fff);
+    view.setInt16(target, sample, true);
+    target += 2;
+  }
+
+  return new Blob([bytes], { type: 'audio/wav' });
+}
+
+async function normalizeRecordedAudio(blob: Blob): Promise<Blob> {
+  const type = blob.type.toLowerCase();
+  if (type.startsWith('audio/wav') || type.startsWith('audio/x-wav')) return blob;
+
+  const AudioContextConstructor = window.AudioContext
+    || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextConstructor) return blob;
+
+  const context = new AudioContextConstructor();
+  try {
+    const source = await blob.arrayBuffer();
+    const decoded = await context.decodeAudioData(source.slice(0));
+    if (!decoded.length || decoded.duration < 0.08) return blob;
+    const wav = wavBlob(decoded);
+    return wav.size && wav.size <= MAX_AUDIO_BYTES ? wav : blob;
+  } catch {
+    // WebView2 normally decodes its own MediaRecorder output. If a codec is missing,
+    // keep the original blob so the server can still try Gemini/Whisper directly.
+    return blob;
+  } finally {
+    void context.close();
+  }
+}
+
 export async function transcribeVoice(blob: Blob, signal?: AbortSignal): Promise<TranscriptionResponse> {
   if (!blob.size) return { ok: false, error: 'صدای ضبط‌شده خالی است.', code: 'VOICE_EMPTY_AUDIO' };
   if (blob.size > MAX_AUDIO_BYTES) return { ok: false, error: 'صدای ضبط‌شده بیش از حد طولانی است.', code: 'VOICE_AUDIO_TOO_LARGE' };
@@ -50,12 +113,16 @@ export async function transcribeVoice(blob: Blob, signal?: AbortSignal): Promise
 
   try {
     const headers = await authenticatedHeaders();
-    const audio = await blobAsBase64(blob);
+    const prepared = await normalizeRecordedAudio(blob);
+    if (prepared.size > MAX_AUDIO_BYTES) {
+      return { ok: false, error: 'صدای ضبط‌شده بیش از حد طولانی است.', code: 'VOICE_AUDIO_TOO_LARGE' };
+    }
+    const audio = await blobAsBase64(prepared);
     const response = await fetch(`${API_URL}/v1/voice/transcribe`, {
       method: 'POST',
       headers,
       signal: controller.signal,
-      body: JSON.stringify({ audio, mimeType: blob.type || 'audio/webm', language: 'fa' }),
+      body: JSON.stringify({ audio, mimeType: prepared.type || blob.type || 'audio/webm', language: 'fa' }),
     });
     const data = await response.json() as TranscriptionResponse;
     if (!response.ok || !data.ok) {
