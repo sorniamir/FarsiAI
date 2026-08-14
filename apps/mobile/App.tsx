@@ -17,6 +17,7 @@ import { DEFAULT_DAILY_QUOTA, getAuthenticatedQuota, getGuestQuota } from './src
 import { AuthScreen } from './src/screens/AuthScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
+import { ImageStudioScreen } from './src/screens/ImageStudioScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { VideoComingSoon } from './src/screens/VideoComingSoon';
@@ -150,6 +151,21 @@ function AppContent() {
             )}
           </View>
         </KeyboardAvoidingView>
+      ) : tab === 'studio' ? (
+        <ImageStudioScreen
+          isGuest={isGuest}
+          onCreateImage={() => {
+            setConversationId(undefined);
+            setMode('image');
+            setTab('chat');
+          }}
+          onOpenConversation={(id) => {
+            setConversationId(id);
+            setMode('image');
+            setTab('chat');
+          }}
+          onRequireAccount={() => setStage('auth')}
+        />
       ) : tab === 'history' ? (
         <HistoryScreen onOpenChat={(id) => { setConversationId(id); setTab('chat'); }} />
       ) : (
