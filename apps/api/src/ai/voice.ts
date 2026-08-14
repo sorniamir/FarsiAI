@@ -4,6 +4,7 @@ import { resolveAuth } from '../lib/supabase-auth';
 import type { Env } from '../types';
 
 const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
+const WHISPER_FALLBACK_MODEL = '@cf/openai/whisper';
 const DEFAULT_STT_MODEL = 'gemini-3.1-flash-lite';
 const DEFAULT_TTS_MODEL = 'gemini-3.1-flash-tts-preview';
 const FALLBACK_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
@@ -226,25 +227,68 @@ async function geminiTranscribe(env: Env, audio: string, mimeType: string, langu
   }
 }
 
-async function workersTranscribe(env: Env, audio: string, language: string): Promise<{ text: string; model: string } | null> {
+async function whisperTurboTranscribe(
+  env: Env,
+  audio: string,
+  language: string,
+  relaxed: boolean,
+): Promise<{ text: string; model: string } | null> {
   try {
-    const result = await env.AI.run(WHISPER_MODEL, {
+    const input: Record<string, unknown> = {
       audio,
       task: 'transcribe',
       language,
-      vad_filter: true,
+      vad_filter: !relaxed,
       initial_prompt: 'گفت‌وگوی طبیعی فارسی با علائم نگارشی صحیح.',
-    });
+    };
+    if (relaxed) {
+      input.vad_filter = false;
+      input.no_speech_threshold = 0.95;
+      input.condition_on_previous_text = false;
+      input.beam_size = 5;
+    }
+    const result = await env.AI.run(WHISPER_MODEL, input as any);
     const text = transcriptionText(result);
-    return text ? { text, model: WHISPER_MODEL } : null;
+    if (!text) {
+      console.warn(JSON.stringify({ event: 'workers_whisper_empty', model: WHISPER_MODEL, relaxed }));
+      return null;
+    }
+    return { text, model: WHISPER_MODEL };
   } catch (error) {
     console.warn(JSON.stringify({
       event: 'workers_whisper_failed',
       model: WHISPER_MODEL,
+      relaxed,
       message: error instanceof Error ? error.message : 'unknown_whisper_error',
     }));
     return null;
   }
+}
+
+async function legacyWhisperTranscribe(env: Env, audio: string): Promise<{ text: string; model: string } | null> {
+  try {
+    const bytes = Array.from(decodeBase64(audio));
+    const result = await env.AI.run(WHISPER_FALLBACK_MODEL, { audio: bytes } as any);
+    const text = transcriptionText(result);
+    if (!text) {
+      console.warn(JSON.stringify({ event: 'workers_legacy_whisper_empty', model: WHISPER_FALLBACK_MODEL }));
+      return null;
+    }
+    return { text, model: WHISPER_FALLBACK_MODEL };
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'workers_legacy_whisper_failed',
+      model: WHISPER_FALLBACK_MODEL,
+      message: error instanceof Error ? error.message : 'unknown_legacy_whisper_error',
+    }));
+    return null;
+  }
+}
+
+async function workersTranscribe(env: Env, audio: string, language: string): Promise<{ text: string; model: string } | null> {
+  return await whisperTurboTranscribe(env, audio, language, false)
+    ?? await whisperTurboTranscribe(env, audio, language, true)
+    ?? await legacyWhisperTranscribe(env, audio);
 }
 
 async function geminiGenerateContentTts(env: Env, text: string, model: string): Promise<GeneratedAudio | null> {
@@ -323,10 +367,17 @@ export async function handleVoiceTranscription(request: Request, env: Env): Prom
     : 'fa';
 
   try {
+    // Gemini is useful when configured, while the Workers chain keeps Voice Chat functional without a Google key.
+    // Desktop uploads normalized WAV when possible, which is materially more reliable than WebM/Opus for ASR.
     const transcription = await geminiTranscribe(env, audio, mimeType, language)
       ?? await workersTranscribe(env, audio, language);
     if (!transcription?.text) {
-      return json(env, { ok: false, error: 'گفتار واضحی در صدای ضبط‌شده تشخیص داده نشد یا سرویس گفتار موقتاً پاسخ نداد؛ دوباره تلاش کنید.', code: 'VOICE_NO_SPEECH', requestId }, 422);
+      return json(env, {
+        ok: false,
+        error: 'گفتار واضحی در صدای ضبط‌شده تشخیص داده نشد یا همه سرویس‌های تشخیص گفتار موقتاً پاسخ ندادند؛ دوباره تلاش کنید.',
+        code: 'VOICE_NO_SPEECH',
+        requestId,
+      }, 422);
     }
 
     console.log(JSON.stringify({ event: 'voice_transcription_success', requestId, model: transcription.model, characters: transcription.text.length, authenticated: access.authenticated }));
