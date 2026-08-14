@@ -8,6 +8,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { AppErrorBoundary } from './src/components/AppErrorBoundary';
 import { AppHeader } from './src/components/AppHeader';
 import { BottomNav, type MainTab } from './src/components/BottomNav';
 import { ModeBar } from './src/components/ModeBar';
@@ -28,7 +29,11 @@ import type { AppMode, DailyQuota } from './src/types';
 type Stage = 'onboarding' | 'auth' | 'app';
 
 export default function App() {
-  return <ThemeProvider><AppContent /></ThemeProvider>;
+  return (
+    <AppErrorBoundary>
+      <ThemeProvider><AppContent /></ThemeProvider>
+    </AppErrorBoundary>
+  );
 }
 
 function AppContent() {
