@@ -1,0 +1,102 @@
+import { supabase } from '../lib/supabase';
+import { resolveStoredImageUrls } from './media';
+
+export type ImageLibraryItem = {
+  id: string;
+  imageUrl: string;
+  conversationId: string;
+  title: string;
+  createdAt: string;
+  favorite: boolean;
+};
+
+type ConversationRelation = { title?: string | null } | Array<{ title?: string | null }> | null;
+type ImageRow = {
+  id?: unknown;
+  image_url?: unknown;
+  conversation_id?: unknown;
+  created_at?: unknown;
+  conversations?: ConversationRelation;
+};
+
+type FavoriteRow = { message_id?: unknown };
+
+function conversationTitle(value: ConversationRelation): string {
+  const row = Array.isArray(value) ? value[0] : value;
+  const title = typeof row?.title === 'string' ? row.title.trim() : '';
+  return title || 'تصویر FarsiAI';
+}
+
+export async function listImageLibrary(): Promise<ImageLibraryItem[]> {
+  if (!supabase) return [];
+
+  const [imagesResult, favoritesResult] = await Promise.all([
+    supabase
+      .from('messages')
+      .select('id,image_url,conversation_id,created_at,conversations(title)')
+      .eq('role', 'assistant')
+      .not('image_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(60),
+    supabase
+      .from('image_favorites')
+      .select('message_id')
+      .order('created_at', { ascending: false })
+      .limit(200),
+  ]);
+
+  if (imagesResult.error) throw new Error('خواندن گالری Cloud ناموفق بود.');
+  if (favoritesResult.error) throw new Error('خواندن Favorites ناموفق بود.');
+
+  const favoriteIds = new Set(
+    ((favoritesResult.data ?? []) as FavoriteRow[])
+      .map((row) => typeof row.message_id === 'string' ? row.message_id : '')
+      .filter(Boolean),
+  );
+
+  const rows = (imagesResult.data ?? []) as ImageRow[];
+  const signedUrls = await resolveStoredImageUrls(
+    rows.map((row) => typeof row.image_url === 'string' ? row.image_url : undefined),
+  );
+
+  return rows.flatMap((row) => {
+    if (
+      typeof row.id !== 'string'
+      || typeof row.image_url !== 'string'
+      || typeof row.conversation_id !== 'string'
+      || typeof row.created_at !== 'string'
+    ) return [];
+
+    const resolvedUrl = signedUrls.get(row.image_url);
+    if (!resolvedUrl) return [];
+
+    return [{
+      id: row.id,
+      imageUrl: resolvedUrl,
+      conversationId: row.conversation_id,
+      title: conversationTitle(row.conversations ?? null),
+      createdAt: row.created_at,
+      favorite: favoriteIds.has(row.id),
+    }];
+  });
+}
+
+export async function setImageFavorite(messageId: string, favorite: boolean): Promise<void> {
+  if (!supabase) throw new Error('اتصال حساب کاربری در دسترس نیست.');
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData.user?.id;
+  if (authError || !userId) throw new Error('برای Favorite کردن تصویر دوباره وارد حساب شوید.');
+
+  if (favorite) {
+    const { error } = await supabase.from('image_favorites').insert({ user_id: userId, message_id: messageId });
+    if (error) throw new Error('ذخیره Favorite ناموفق بود.');
+    return;
+  }
+
+  const { error } = await supabase
+    .from('image_favorites')
+    .delete()
+    .eq('user_id', userId)
+    .eq('message_id', messageId);
+  if (error) throw new Error('حذف Favorite ناموفق بود.');
+}

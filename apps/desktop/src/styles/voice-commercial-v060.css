@@ -1,0 +1,20 @@
+/* Commercial voice polish. Premium entitlement is already present on the shell as .premium-profile. */
+body:has(.premium-profile) .voice-heading > span {
+  font-size: 0;
+  color: #00ffae;
+  border-color: rgba(0, 255, 174, 0.24);
+  background: rgba(0, 255, 174, 0.055);
+}
+
+body:has(.premium-profile) .voice-heading > span::after {
+  content: '◆ Premium · نامحدود';
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+}
+
+[data-theme="light"] body:has(.premium-profile) .voice-heading > span {
+  color: #008f61;
+  border-color: rgba(0, 145, 99, 0.24);
+  background: rgba(0, 185, 124, 0.08);
+}

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type AiMode = 'chat' | 'image';
-export type DailyQuota = { chatRemaining: number; imageRemaining: number };
+export type DailyQuota = { chatRemaining: number; imageRemaining: number; unlimited?: boolean };
 export type ApiMessage = { role: 'user' | 'assistant'; content: string };
 export type ApiAttachment = { id: string; name: string; mimeType: string; size: number; dataUrl: string; previewUrl?: string };
 

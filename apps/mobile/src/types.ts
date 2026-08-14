@@ -3,6 +3,7 @@ export type AppMode = 'chat' | 'image' | 'video';
 export type DailyQuota = {
   chatRemaining: number;
   imageRemaining: number;
+  unlimited?: boolean;
 };
 
 export type UiAttachment = {

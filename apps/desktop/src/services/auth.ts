@@ -5,11 +5,18 @@ export type AuthResult =
   | { ok: true; needsEmailConfirmation?: boolean }
   | { ok: false; message: string };
 
+const API_URL = (import.meta.env.VITE_API_URL?.trim() || 'https://farsiai-api.sorniamir2005.workers.dev').replace(/\/$/, '');
+const PASSWORD_RECOVERY_URL = `${API_URL}/auth/recovery`;
+
 function unavailable(): AuthResult {
   return {
     ok: false,
     message: 'Supabase هنوز برای نسخه دسکتاپ تنظیم نشده است.',
   };
+}
+
+function validEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 export async function signIn(email: string, password: string): Promise<AuthResult> {
@@ -34,6 +41,24 @@ export async function signUp(email: string, password: string): Promise<AuthResul
   });
   if (error) return { ok: false, message: error.message };
   return { ok: true, needsEmailConfirmation: !data.session };
+}
+
+export async function requestPasswordReset(email: string): Promise<AuthResult> {
+  if (!isSupabaseConfigured || !supabase) return unavailable();
+  const cleanEmail = email.trim();
+  if (!validEmail(cleanEmail)) return { ok: false, message: 'ابتدا ایمیل معتبر حسابت را وارد کن.' };
+  const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: PASSWORD_RECOVERY_URL });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function resendEmailConfirmation(email: string): Promise<AuthResult> {
+  if (!isSupabaseConfigured || !supabase) return unavailable();
+  const cleanEmail = email.trim();
+  if (!validEmail(cleanEmail)) return { ok: false, message: 'ابتدا ایمیل معتبر حسابت را وارد کن.' };
+  const { error } = await supabase.auth.resend({ type: 'signup', email: cleanEmail });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 
 export async function signOut(): Promise<void> {

@@ -1,5 +1,6 @@
 import { corsHeaders, json } from '../lib/http';
 import { sanitizeText } from '../lib/language';
+import { resolveAuth } from '../lib/supabase-auth';
 import type { Env } from '../types';
 
 const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
@@ -8,6 +9,7 @@ const DEFAULT_TTS_MODEL = 'gemini-3.1-flash-tts-preview';
 const FALLBACK_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const DEFAULT_TTS_VOICE = 'Kore';
 const MAX_BASE64_LENGTH = 10_500_000;
+const MAX_GENERATED_AUDIO_BASE64 = 14_000_000;
 const MAX_TTS_TEXT_LENGTH = 4000;
 const SUPPORTED_AUDIO_TYPES = new Set([
   'audio/webm',
@@ -35,8 +37,30 @@ type GeneratedAudio = {
   model: string;
 };
 
+type VoiceAccess =
+  | { ok: true; actorKey: string; authenticated: boolean }
+  | { ok: false; response: Response };
+
 function normalizedMimeType(value: unknown): string {
   return typeof value === 'string' ? value.toLowerCase().split(';', 1)[0].trim() : '';
+}
+
+async function resolveVoiceAccess(request: Request, env: Env, requestId: string): Promise<VoiceAccess> {
+  const auth = await resolveAuth(request, env);
+  if (auth.kind === 'invalid') {
+    return { ok: false, response: json(env, { ok: false, error: 'نشست کاربری معتبر نیست. دوباره وارد حساب شوید.', code: 'VOICE_AUTH_INVALID', requestId }, 401) };
+  }
+  if (auth.kind === 'unconfigured') {
+    return { ok: false, response: json(env, { ok: false, error: 'اتصال حساب کاربری به سرور هنوز کامل نشده است.', code: 'VOICE_AUTH_UNCONFIGURED', requestId }, 503) };
+  }
+  if (auth.kind === 'user') {
+    if (auth.user.banned) {
+      return { ok: false, response: json(env, { ok: false, error: 'این حساب توسط مدیریت FarsiAI مسدود شده است.', code: 'VOICE_ACCOUNT_BANNED', requestId }, 403) };
+    }
+    return { ok: true, actorKey: `user:${auth.user.id}`, authenticated: true };
+  }
+  const guestIp = request.headers.get('cf-connecting-ip') || 'anonymous';
+  return { ok: true, actorKey: `guest:${guestIp}`, authenticated: false };
 }
 
 function transcriptionText(result: unknown): string {
@@ -53,8 +77,8 @@ function transcriptionText(result: unknown): string {
 function audioBlock(value: unknown, model: string): GeneratedAudio | null {
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
-  const data = typeof item.data === 'string' ? item.data : '';
-  if (!data) return null;
+  const data = typeof item.data === 'string' ? item.data.trim() : '';
+  if (!data || data.length > MAX_GENERATED_AUDIO_BASE64 || !/^[A-Za-z0-9+/\s]+={0,2}$/.test(data)) return null;
   const mimeType = typeof item.mime_type === 'string'
     ? item.mime_type
     : typeof item.mimeType === 'string'
@@ -69,8 +93,10 @@ function extractGeneratedAudio(value: unknown, model: string): GeneratedAudio | 
   if (typeof payload.audio === 'string' && payload.audio.trim()) {
     const raw = payload.audio.trim();
     const dataUrl = raw.match(/^data:([^;,]+)(?:;[^,]*)?;base64,(.+)$/s);
+    const data = (dataUrl?.[2] ?? raw).trim();
+    if (!data || data.length > MAX_GENERATED_AUDIO_BASE64 || !/^[A-Za-z0-9+/\s]+={0,2}$/.test(data)) return null;
     return {
-      data: dataUrl?.[2] ?? raw,
+      data,
       mimeType: dataUrl?.[1] ?? 'audio/wav',
       model,
     };
@@ -196,7 +222,7 @@ async function geminiGenerateContentTts(env: Env, text: string): Promise<Generat
       'x-goog-api-key': env.GEMINI_API_KEY!,
     },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: `Ø¨Ø§ ØµØ¯Ø§ÛŒÛŒ Ø·Ø¨ÛŒØ¹ÛŒØŒ Ú¯Ø±Ù… Ùˆ ÙˆØ§Ø¶Ø­ Ùˆ Ø¨Ø§ Ø³Ø±Ø¹Øª Ù…Ú©Ø§Ù„Ù…Ù‡â€ŒØ§ÛŒØŒ ÙÙ‚Ø· Ù…ØªÙ† Ø²ÛŒØ± Ø±Ø§ Ø¨Ù‡ ÙØ§Ø±Ø³ÛŒ Ø¨Ø®ÙˆØ§Ù† Ùˆ Ú†ÛŒØ²ÛŒ Ø¨Ù‡ Ø¢Ù† Ø§Ø¶Ø§ÙÙ‡ Ù†Ú©Ù†:\n\n${text}` }] }],
+      contents: [{ parts: [{ text: `با صدایی طبیعی، گرم و واضح و با سرعت مکالمه‌ای، فقط متن زیر را به فارسی بخوان و چیزی به آن اضافه یا از آن کم نکن:\n\n${text}` }] }],
       generationConfig: {
         responseModalities: ['AUDIO'],
         speechConfig: {
@@ -219,28 +245,29 @@ export async function handleVoiceTranscription(request: Request, env: Env): Prom
   try {
     payload = await request.json() as VoicePayload;
   } catch {
-    return json(env, { ok: false, error: 'Ø¯Ø§Ø¯Ù‡ ØµÙˆØªÛŒ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª.', code: 'VOICE_INVALID_JSON', requestId }, 400);
+    return json(env, { ok: false, error: 'داده صوتی معتبر نیست.', code: 'VOICE_INVALID_JSON', requestId }, 400);
   }
 
   const audio = typeof payload.audio === 'string' ? payload.audio.trim() : '';
   const mimeType = normalizedMimeType(payload.mimeType);
   if (!audio || audio.length < 64) {
-    return json(env, { ok: false, error: 'ØµØ¯Ø§ÛŒ Ø¶Ø¨Ø·â€ŒØ´Ø¯Ù‡ Ø®Ø§Ù„ÛŒ Ø§Ø³Øª.', code: 'VOICE_EMPTY_AUDIO', requestId }, 400);
+    return json(env, { ok: false, error: 'صدای ضبط‌شده خالی است.', code: 'VOICE_EMPTY_AUDIO', requestId }, 400);
   }
   if (audio.length > MAX_BASE64_LENGTH) {
-    return json(env, { ok: false, error: 'Ù…Ø¯Øª ÛŒØ§ Ø­Ø¬Ù… ØµØ¯Ø§ÛŒ Ø¶Ø¨Ø·â€ŒØ´Ø¯Ù‡ Ø¨ÛŒØ´ Ø§Ø² Ø­Ø¯ Ù…Ø¬Ø§Ø² Ø§Ø³Øª.', code: 'VOICE_AUDIO_TOO_LARGE', requestId }, 413);
+    return json(env, { ok: false, error: 'مدت یا حجم صدای ضبط‌شده بیش از حد مجاز است.', code: 'VOICE_AUDIO_TOO_LARGE', requestId }, 413);
   }
   if (!SUPPORTED_AUDIO_TYPES.has(mimeType)) {
-    return json(env, { ok: false, error: 'ÙØ±Ù…Øª ØµØ¯Ø§ÛŒ Ø¶Ø¨Ø·â€ŒØ´Ø¯Ù‡ Ù¾Ø´ØªÛŒØ¨Ø§Ù†ÛŒ Ù†Ù…ÛŒâ€ŒØ´ÙˆØ¯.', code: 'VOICE_UNSUPPORTED_FORMAT', requestId }, 415);
+    return json(env, { ok: false, error: 'فرمت صدای ضبط‌شده پشتیبانی نمی‌شود.', code: 'VOICE_UNSUPPORTED_FORMAT', requestId }, 415);
   }
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(audio)) {
-    return json(env, { ok: false, error: 'Ø³Ø§Ø®ØªØ§Ø± ØµØ¯Ø§ÛŒ Ø¶Ø¨Ø·â€ŒØ´Ø¯Ù‡ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª.', code: 'VOICE_INVALID_AUDIO', requestId }, 400);
+    return json(env, { ok: false, error: 'ساختار صدای ضبط‌شده معتبر نیست.', code: 'VOICE_INVALID_AUDIO', requestId }, 400);
   }
 
-  const actor = request.headers.get('cf-connecting-ip') || 'anonymous';
-  const limited = await env.API_RATE_LIMITER.limit({ key: `voice:${actor}` });
+  const access = await resolveVoiceAccess(request, env, requestId);
+  if (!access.ok) return access.response;
+  const limited = await env.API_RATE_LIMITER.limit({ key: `voice:${access.actorKey}` });
   if (!limited.success) {
-    return json(env, { ok: false, error: 'ØªØ¹Ø¯Ø§Ø¯ Ø¯Ø±Ø®ÙˆØ§Ø³Øªâ€ŒÙ‡Ø§ÛŒ ØµÙˆØªÛŒ Ø²ÛŒØ§Ø¯ Ø´Ø¯Ù‡Ø› Ú†Ù†Ø¯ Ù„Ø­Ø¸Ù‡ Ø¨Ø¹Ø¯ Ø¯ÙˆØ¨Ø§Ø±Ù‡ ØªÙ„Ø§Ø´ Ú©Ù†ÛŒØ¯.', code: 'VOICE_RATE_LIMITED', requestId }, 429);
+    return json(env, { ok: false, error: 'تعداد درخواست‌های صوتی زیاد شده؛ چند لحظه بعد دوباره تلاش کنید.', code: 'VOICE_RATE_LIMITED', requestId }, 429);
   }
 
   try {
@@ -249,14 +276,14 @@ export async function handleVoiceTranscription(request: Request, env: Env): Prom
       task: 'transcribe',
       language: typeof payload.language === 'string' && payload.language.trim() ? payload.language.trim().slice(0, 12) : 'fa',
       vad_filter: true,
-      initial_prompt: 'Ú¯ÙØªâ€ŒÙˆÚ¯ÙˆÛŒ Ø·Ø¨ÛŒØ¹ÛŒ ÙØ§Ø±Ø³ÛŒ Ø¨Ø§ Ø¹Ù„Ø§Ø¦Ù… Ù†Ú¯Ø§Ø±Ø´ÛŒ ØµØ­ÛŒØ­.',
+      initial_prompt: 'گفت‌وگوی طبیعی فارسی با علائم نگارشی صحیح.',
     });
     const text = transcriptionText(result);
     if (!text) {
-      return json(env, { ok: false, error: 'Ú¯ÙØªØ§Ø± ÙˆØ§Ø¶Ø­ÛŒ Ø¯Ø± ØµØ¯Ø§ÛŒ Ø¶Ø¨Ø·â€ŒØ´Ø¯Ù‡ ØªØ´Ø®ÛŒØµ Ø¯Ø§Ø¯Ù‡ Ù†Ø´Ø¯Ø› Ú©Ù…ÛŒ Ù†Ø²Ø¯ÛŒÚ©â€ŒØªØ± Ø¨Ù‡ Ù…ÛŒÚ©Ø±ÙˆÙÙ† ØµØ­Ø¨Øª Ú©Ù†ÛŒØ¯.', code: 'VOICE_NO_SPEECH', requestId }, 422);
+      return json(env, { ok: false, error: 'گفتار واضحی در صدای ضبط‌شده تشخیص داده نشد؛ کمی نزدیک‌تر به میکروفن صحبت کنید.', code: 'VOICE_NO_SPEECH', requestId }, 422);
     }
 
-    console.log(JSON.stringify({ event: 'voice_transcription_success', requestId, model: WHISPER_MODEL, characters: text.length }));
+    console.log(JSON.stringify({ event: 'voice_transcription_success', requestId, model: WHISPER_MODEL, characters: text.length, authenticated: access.authenticated }));
     return json(env, { ok: true, text, model: WHISPER_MODEL, requestId });
   } catch (error) {
     console.error(JSON.stringify({
@@ -264,7 +291,7 @@ export async function handleVoiceTranscription(request: Request, env: Env): Prom
       requestId,
       message: error instanceof Error ? error.message : 'unknown_voice_error',
     }));
-    return json(env, { ok: false, error: 'Ù¾Ø±Ø¯Ø§Ø²Ø´ ØµØ¯Ø§ Ù…ÙˆÙ‚ØªØ§Ù‹ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯Ø› Ø¯ÙˆØ¨Ø§Ø±Ù‡ ØªÙ„Ø§Ø´ Ú©Ù†ÛŒØ¯.', code: 'VOICE_TRANSCRIPTION_FAILED', requestId }, 502);
+    return json(env, { ok: false, error: 'پردازش صدا موقتاً ناموفق بود؛ دوباره تلاش کنید.', code: 'VOICE_TRANSCRIPTION_FAILED', requestId }, 502);
   }
 }
 
@@ -275,17 +302,18 @@ export async function handleVoiceSynthesis(request: Request, env: Env): Promise<
   try {
     payload = await request.json() as TtsPayload;
   } catch {
-    return json(env, { ok: false, error: 'Ù…ØªÙ† Ù¾Ø§Ø³Ø® ØµÙˆØªÛŒ Ù…Ø¹ØªØ¨Ø± Ù†ÛŒØ³Øª.', code: 'VOICE_TTS_INVALID_JSON', requestId }, 400);
+    return json(env, { ok: false, error: 'متن پاسخ صوتی معتبر نیست.', code: 'VOICE_TTS_INVALID_JSON', requestId }, 400);
   }
   const text = sanitizeText(payload.text, MAX_TTS_TEXT_LENGTH);
   if (!text) {
-    return json(env, { ok: false, error: 'Ù…ØªÙ† Ù¾Ø§Ø³Ø® ØµÙˆØªÛŒ Ø®Ø§Ù„ÛŒ Ø§Ø³Øª.', code: 'VOICE_TTS_EMPTY_TEXT', requestId }, 400);
+    return json(env, { ok: false, error: 'متن پاسخ صوتی خالی است.', code: 'VOICE_TTS_EMPTY_TEXT', requestId }, 400);
   }
 
-  const actor = request.headers.get('cf-connecting-ip') || 'anonymous';
-  const limited = await env.API_RATE_LIMITER.limit({ key: `voice-tts:${actor}` });
+  const access = await resolveVoiceAccess(request, env, requestId);
+  if (!access.ok) return access.response;
+  const limited = await env.API_RATE_LIMITER.limit({ key: `voice-tts:${access.actorKey}` });
   if (!limited.success) {
-    return json(env, { ok: false, error: 'ØªØ¹Ø¯Ø§Ø¯ Ù¾Ø§Ø³Ø®â€ŒÙ‡Ø§ÛŒ ØµÙˆØªÛŒ Ø²ÛŒØ§Ø¯ Ø´Ø¯Ù‡Ø› Ú†Ù†Ø¯ Ù„Ø­Ø¸Ù‡ Ø¨Ø¹Ø¯ Ø¯ÙˆØ¨Ø§Ø±Ù‡ ØªÙ„Ø§Ø´ Ú©Ù†ÛŒØ¯.', code: 'VOICE_TTS_RATE_LIMITED', requestId }, 429);
+    return json(env, { ok: false, error: 'تعداد پاسخ‌های صوتی زیاد شده؛ چند لحظه بعد دوباره تلاش کنید.', code: 'VOICE_TTS_RATE_LIMITED', requestId }, 429);
   }
 
   try {
@@ -293,12 +321,12 @@ export async function handleVoiceSynthesis(request: Request, env: Env): Promise<
       ?? (env.GEMINI_API_KEY ? await geminiInteractionTts(env, text) : null)
       ?? (env.GEMINI_API_KEY ? await geminiGenerateContentTts(env, text) : null);
     if (!audio) {
-      return json(env, { ok: false, error: 'Ø³Ø§Ø®Øª Ù¾Ø§Ø³Ø® ØµÙˆØªÛŒ Ù…ÙˆÙ‚ØªØ§Ù‹ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯Ø› Ø¯ÙˆØ¨Ø§Ø±Ù‡ ØªÙ„Ø§Ø´ Ú©Ù†ÛŒØ¯.', code: 'VOICE_TTS_FAILED', requestId }, 502);
+      return json(env, { ok: false, error: 'ساخت پاسخ صوتی موقتاً ناموفق بود؛ دوباره تلاش کنید.', code: 'VOICE_TTS_FAILED', requestId }, 502);
     }
     const wav = audioAsWav(audio);
     const body = new Uint8Array(wav.byteLength);
     body.set(wav);
-    console.log(JSON.stringify({ event: 'voice_synthesis_success', requestId, model: audio.model, bytes: wav.length }));
+    console.log(JSON.stringify({ event: 'voice_synthesis_success', requestId, model: audio.model, bytes: wav.length, authenticated: access.authenticated }));
     return new Response(body.buffer, {
       status: 200,
       headers: {
@@ -315,7 +343,6 @@ export async function handleVoiceSynthesis(request: Request, env: Env): Promise<
       requestId,
       message: error instanceof Error ? error.message : 'unknown_tts_error',
     }));
-    return json(env, { ok: false, error: 'Ø³Ø§Ø®Øª Ù¾Ø§Ø³Ø® ØµÙˆØªÛŒ Ù…ÙˆÙ‚ØªØ§Ù‹ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯Ø› Ø¯ÙˆØ¨Ø§Ø±Ù‡ ØªÙ„Ø§Ø´ Ú©Ù†ÛŒØ¯.', code: 'VOICE_TTS_FAILED', requestId }, 502);
+    return json(env, { ok: false, error: 'ساخت پاسخ صوتی موقتاً ناموفق بود؛ دوباره تلاش کنید.', code: 'VOICE_TTS_FAILED', requestId }, 502);
   }
 }
-

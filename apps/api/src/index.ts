@@ -6,6 +6,7 @@ import { runImage } from './ai/image';
 import { handleVoiceSynthesis, handleVoiceTranscription } from './ai/voice';
 import { handleAdminRequest } from './admin';
 import { renderAdminPanel } from './admin-ui';
+import { renderPasswordRecovery } from './auth-recovery-ui';
 import {
   refundDailyQuota,
   refundGuestDailyQuota,
@@ -13,6 +14,7 @@ import {
   spendGuestDailyQuota,
 } from './lib/credits';
 import { corsHeaders, json } from './lib/http';
+import { persistGeneratedImage } from './lib/image-storage';
 import { sanitizeText } from './lib/language';
 import { ensureConversation, saveMessage } from './lib/persistence';
 import { resolveAuth } from './lib/supabase-auth';
@@ -75,6 +77,10 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
     }
 
+    if (request.method === 'GET' && (url.pathname === '/auth/recovery' || url.pathname === '/auth/recovery/')) {
+      return renderPasswordRecovery(env);
+    }
+
     if (request.method === 'GET' && (url.pathname === '/admin' || url.pathname === '/admin/')) {
       return renderAdminPanel(env);
     }
@@ -84,12 +90,10 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.5.3' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.6.0' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
-      // Local tool failures are intentionally returned to Codex Pro as observations.
-      // The planner can diagnose and recover instead of stopping after the first error.
       return handleAgentPlan(request, env);
     }
 
@@ -248,13 +252,14 @@ export default {
 
         if (auth.kind === 'user' && conversationId) {
           try {
+            const storedImage = await persistGeneratedImage(env, auth.user.id, result.image);
             await saveMessage(
               env,
               conversationId,
               auth.user.id,
               'assistant',
               result.edited ? 'ویرایش تصویر آماده شد.' : 'تصویر آماده شد.',
-              result.image,
+              storedImage ?? undefined,
             );
           } catch (persistenceError) {
             console.error(JSON.stringify({
