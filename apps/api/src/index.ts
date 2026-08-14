@@ -90,7 +90,7 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json(env, { ok: true, service: 'farsiai-api', version: '0.5.3' });
+      return json(env, { ok: true, service: 'farsiai-api', version: '0.6.0' });
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/agent/plan') {
