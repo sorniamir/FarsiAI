@@ -89,16 +89,17 @@ describe('v0.4.6 image and attachment contract', () => {
     assert.equal(aiRun.mock.callCount(), 1);
   });
 
-  it('uses Gemini output_image directly when Nano Banana succeeds', async () => {
+  it('uses Gemini generateContent image bytes directly when Nano Banana succeeds', async () => {
     const aiRun = mock.fn(async () => ({ image: 'unused' }));
     const env = { ...envWithAi({ run: aiRun }), GEMINI_API_KEY: 'test-gemini-key' };
     globalThis.fetch = mock.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes('generativelanguage.googleapis.com/v1beta/interactions')) {
-        const body = JSON.parse(String(init?.body ?? '{}')) as { model?: string; response_format?: { type?: string } };
-        assert.equal(body.model, 'gemini-3.1-flash-image');
-        assert.equal(body.response_format?.type, 'image');
-        return Response.json({ output_image: { data: 'YWJjZA==', mime_type: 'image/png' } });
+      if (url.includes('generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { generationConfig?: { responseModalities?: string[] } };
+        assert.deepEqual(body.generationConfig?.responseModalities, ['IMAGE']);
+        return Response.json({
+          candidates: [{ content: { parts: [{ inlineData: { data: 'YWJjZA==', mimeType: 'image/png' } }] } }],
+        });
       }
       if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
       if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
@@ -115,10 +116,11 @@ describe('v0.4.6 image and attachment contract', () => {
     const payload = await response.json() as { image: string; provider?: string; edited: boolean };
     assert.equal(payload.image, 'data:image/png;base64,YWJjZA==');
     assert.equal(payload.edited, false);
+    assert.equal(payload.provider, 'gemini-3.1-flash-image');
     assert.equal(aiRun.mock.callCount(), 0);
   });
 
-  it('falls back to Workers AI when Gemini image generation fails', async () => {
+  it('falls back to Workers AI when both Gemini image routes fail', async () => {
     const aiRun = mock.fn(async (model: string, input: Record<string, unknown>) => {
       assert.equal(model, '@cf/black-forest-labs/flux-1-schnell');
       assert.equal(input.steps, 8);
@@ -127,7 +129,7 @@ describe('v0.4.6 image and attachment contract', () => {
     const env = { ...envWithAi({ run: aiRun }), GEMINI_API_KEY: 'test-gemini-key' };
     globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('generativelanguage.googleapis.com/v1beta/interactions')) {
+      if (url.includes('generativelanguage.googleapis.com/')) {
         return new Response('provider unavailable', { status: 503 });
       }
       if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
@@ -144,6 +146,50 @@ describe('v0.4.6 image and attachment contract', () => {
     assert.equal(response.status, 200);
     assert.equal((await response.json() as { image: string }).image, 'data:image/jpeg;base64,ZmFsbGJhY2s=');
     assert.equal(aiRun.mock.callCount(), 1);
+  });
+
+  it('does not fail Persian image generation when the translation model is unavailable', async () => {
+    installGuestQuotaFetch();
+    const aiRun = mock.fn(async (model: string) => {
+      if (model === '@cf/meta/m2m100-1.2b') throw new Error('translation provider unavailable');
+      if (model === '@cf/black-forest-labs/flux-1-schnell') return { image: 'cGVyc2lhbg==' };
+      throw new Error(`Unexpected model: ${model}`);
+    });
+    const env = envWithAi({ run: aiRun });
+
+    const response = await worker.fetch(request({
+      mode: 'image',
+      message: 'یک شهر آینده‌نگرانه در شب بساز',
+      imageAction: 'generate',
+    }), env);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as { image: string; provider?: string };
+    assert.equal(payload.image, 'data:image/jpeg;base64,cGVyc2lhbg==');
+    assert.equal(payload.provider, '@cf/black-forest-labs/flux-1-schnell');
+    assert.equal(aiRun.mock.callCount(), 2);
+  });
+
+  it('falls back to SDXL Lightning when the primary Workers image model fails', async () => {
+    installGuestQuotaFetch();
+    const aiRun = mock.fn(async (model: string) => {
+      if (model === '@cf/black-forest-labs/flux-1-schnell') throw new Error('flux unavailable');
+      if (model === '@cf/bytedance/stable-diffusion-xl-lightning') return new Uint8Array([1, 2, 3, 4]);
+      throw new Error(`Unexpected model: ${model}`);
+    });
+    const env = envWithAi({ run: aiRun });
+
+    const response = await worker.fetch(request({
+      mode: 'image',
+      message: 'fallback product render',
+      imageAction: 'generate',
+    }), env);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as { image: string; provider?: string };
+    assert.equal(payload.image, 'data:image/png;base64,AQIDBA==');
+    assert.equal(payload.provider, '@cf/bytedance/stable-diffusion-xl-lightning');
+    assert.equal(aiRun.mock.callCount(), 2);
   });
 
   it('rejects edit mode when no explicit image reference exists', async () => {
