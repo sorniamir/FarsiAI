@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { resolveStoredImageUrls } from './media';
 
 export type ImageLibraryItem = {
   id: string;
@@ -53,7 +54,12 @@ export async function listImageLibrary(): Promise<ImageLibraryItem[]> {
       .filter(Boolean),
   );
 
-  return ((imagesResult.data ?? []) as ImageRow[]).flatMap((row) => {
+  const rows = (imagesResult.data ?? []) as ImageRow[];
+  const signedUrls = await resolveStoredImageUrls(
+    rows.map((row) => typeof row.image_url === 'string' ? row.image_url : undefined),
+  );
+
+  return rows.flatMap((row) => {
     if (
       typeof row.id !== 'string'
       || typeof row.image_url !== 'string'
@@ -61,9 +67,12 @@ export async function listImageLibrary(): Promise<ImageLibraryItem[]> {
       || typeof row.created_at !== 'string'
     ) return [];
 
+    const resolvedUrl = signedUrls.get(row.image_url);
+    if (!resolvedUrl) return [];
+
     return [{
       id: row.id,
-      imageUrl: row.image_url,
+      imageUrl: resolvedUrl,
       conversationId: row.conversation_id,
       title: conversationTitle(row.conversations ?? null),
       createdAt: row.created_at,
