@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/globals.css';
 import './styles/codex-studio.css';
 import './styles/chat-v046.css';
@@ -8,6 +9,7 @@ import './styles/commercial-v060.css';
 import './styles/chat-commercial-v060.css';
 import './styles/voice-commercial-v060.css';
 import './styles/image-studio-v060.css';
+import './styles/recovery-commercial-v060.css';
 
 type ThemeMode = 'dark' | 'light';
 const THEME_STORAGE_KEY = 'farsiai.theme';
@@ -47,6 +49,8 @@ function ThemedApp() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemedApp />
+    <AppErrorBoundary>
+      <ThemedApp />
+    </AppErrorBoundary>
   </React.StrictMode>,
 );
