@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { resolveStoredImageUrls } from './media';
 
 export type ConversationSummary = {
   id: string;
@@ -40,10 +41,18 @@ export async function getConversationMessages(conversationId: string): Promise<S
     .order('created_at', { ascending: true })
     .limit(100);
   if (error || !data) return [];
-  return data.map((row) => ({
-    id: String(row.id),
-    role: row.role as StoredMessage['role'],
-    content: String(row.content ?? ''),
-    imageUrl: row.image_url ? String(row.image_url) : undefined,
-  }));
+
+  const signedUrls = await resolveStoredImageUrls(
+    data.map((row) => row.image_url ? String(row.image_url) : undefined),
+  );
+
+  return data.map((row) => {
+    const rawImage = row.image_url ? String(row.image_url) : undefined;
+    return {
+      id: String(row.id),
+      role: row.role as StoredMessage['role'],
+      content: String(row.content ?? ''),
+      imageUrl: rawImage ? (signedUrls.get(rawImage) ?? rawImage) : undefined,
+    };
+  });
 }
