@@ -3,10 +3,11 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppTheme } from '../ThemeProvider';
 import type { AppTheme } from '../theme';
 
-export type MainTab = 'chat' | 'history' | 'profile';
+export type MainTab = 'chat' | 'studio' | 'history' | 'profile';
 
 const tabs: { id: MainTab; icon: string; label: string }[] = [
   { id: 'chat', icon: '✦', label: 'هوش مصنوعی' },
+  { id: 'studio', icon: '▧', label: 'تصاویر' },
   { id: 'history', icon: '◷', label: 'تاریخچه' },
   { id: 'profile', icon: '◉', label: 'حساب' },
 ];
