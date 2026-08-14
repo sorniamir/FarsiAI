@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 
 import type { User } from '@supabase/supabase-js';
 import { DesktopVoiceChat } from './components/DesktopVoiceChat';
 import { CodexStudio } from './components/CodexStudio';
+import { DesktopImageStudio } from './components/DesktopImageStudio';
 import { prepareAttachments } from './lib/chatAttachments';
 import { sendAiRequest, type AiMode, type ApiAttachment, type DailyQuota } from './services/api';
 import { getCurrentUser, onAuthChanged, signIn, signOut, signUp } from './services/auth';
@@ -14,7 +15,7 @@ import {
   type ConversationSummary,
 } from './services/data';
 
-type Tab = 'chat' | 'voice' | 'codex';
+type Tab = 'chat' | 'imageStudio' | 'voice' | 'codex';
 type UiMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -340,6 +341,30 @@ export default function AppFinal() {
     setTab('chat');
   }
 
+  async function openImageConversation(id: string) {
+    if (!user) return;
+    const stored = await getConversationMessages(id);
+    setConversationId(id);
+    setMode('image');
+    setMessages(stored.map((message) => ({
+      id: message.id,
+      role: message.role,
+      text: message.content,
+      image: message.imageUrl,
+    })));
+    resetComposer();
+    setTab('chat');
+  }
+
+  function startImageStudio() {
+    setConversationId(undefined);
+    setMessages([]);
+    setMode('image');
+    setInput('');
+    resetComposer();
+    setTab('chat');
+  }
+
   function newConversation() {
     setConversationId(undefined);
     setMessages([]);
@@ -363,6 +388,14 @@ export default function AppFinal() {
   const canSend = !sending && (input.trim().length > 0 || (mode === 'chat' && attachments.length > 0));
   const imageIsEditing = mode === 'image' && (Boolean(replyTarget?.image) || attachments.some((item) => item.mimeType.startsWith('image/')));
   const premium = shownQuota.unlimited || account.plan === 'pro' || account.plan === 'admin';
+  const topbarTitle = tab === 'chat' ? 'FarsiAI Chat' : tab === 'imageStudio' ? 'Image Studio Cloud' : tab === 'voice' ? 'Voice Chat Live' : 'Codex Studio';
+  const topbarCaption = tab === 'chat'
+    ? (isGuest ? 'Guest session · بدون ذخیره Cloud' : premium ? 'Premium entitlement active · Mobile ↔ Desktop' : 'همان اکانت و تاریخچه روی موبایل و دسکتاپ')
+    : tab === 'imageStudio'
+      ? (isGuest ? 'Cloud Gallery نیازمند حساب کاربری است' : 'Generated images · Favorites · Mobile ↔ Desktop')
+      : tab === 'voice'
+        ? 'میکروفن فقط با لمس کاربر فعال می‌شود'
+        : 'Local tools با Permission-first security';
 
   return (
     <div className="app-shell">
@@ -375,6 +408,7 @@ export default function AppFinal() {
         <button className="new-chat" onClick={newConversation}>＋ گفتگوی جدید</button>
         <nav className="nav-stack">
           <NavButton active={tab === 'chat'} label="Chat" caption="گفتگو، فایل و تصویر" onClick={() => setTab('chat')} />
+          <NavButton active={tab === 'imageStudio'} label="Image Studio" caption={isGuest ? 'Cloud Gallery نیازمند ورود' : 'Gallery و Favorites'} onClick={() => setTab('imageStudio')} />
           <NavButton active={tab === 'voice'} label="Voice Chat" caption="گفت‌وگوی زنده فارسی" onClick={() => setTab('voice')} />
           <NavButton active={tab === 'codex'} label="Codex" caption={isGuest ? 'نیازمند ورود' : 'Agent واقعی PC'} onClick={() => setTab('codex')} />
         </nav>
@@ -403,8 +437,8 @@ export default function AppFinal() {
       <main className="main-area">
         <header className="topbar glass">
           <div>
-            <strong>{tab === 'chat' ? 'FarsiAI Chat' : tab === 'voice' ? 'Voice Chat Live' : 'Codex Studio'}</strong>
-            <span>{tab === 'chat' ? (isGuest ? 'Guest session · بدون ذخیره Cloud' : premium ? 'Premium entitlement active · Mobile ↔ Desktop' : 'همان اکانت و تاریخچه روی موبایل و دسکتاپ') : tab === 'voice' ? 'میکروفن فقط با لمس کاربر فعال می‌شود' : 'Local tools با Permission-first security'}</span>
+            <strong>{topbarTitle}</strong>
+            <span>{topbarCaption}</span>
           </div>
           <div className="top-actions">
             <span className={premium ? 'quota-pill premium-quota' : 'quota-pill'}>{premium ? '◆ PRO · Chat & Image نامحدود' : `Chat ${shownQuota.chatRemaining}/${fullQuota.chatRemaining} · Image ${shownQuota.imageRemaining}/${fullQuota.imageRemaining}`}</span>
@@ -536,6 +570,7 @@ export default function AppFinal() {
           </section>
         ) : null}
 
+        {tab === 'imageStudio' ? (isGuest ? <LoginRequired title="Image Studio Cloud" onExit={leaveSession} /> : <DesktopImageStudio onOpenConversation={openImageConversation} onCreateImage={startImageStudio} />) : null}
         {tab === 'voice' ? <DesktopVoiceChat ask={submitVoice} remaining={premium ? 999999 : shownQuota.chatRemaining} /> : null}
         {tab === 'codex' ? (isGuest ? <LoginRequired title="Codex" onExit={leaveSession} /> : <CodexStudio />) : null}
       </main>
@@ -590,7 +625,7 @@ function AuthScreen({ onAuthenticated, onGuest }: { onAuthenticated: () => void;
 }
 
 function LoginRequired({ title, onExit }: { title: string; onExit: () => void }) {
-  return <section className="workspace-layout"><div className="workspace-main glass"><div className="welcome"><img src="/app-icon.png" alt="FarsiAI" /><h1>{title} نیازمند ورود است</h1><p>برای دسترسی به PC و اجرای ابزارهای محلی، ابتدا با حساب FarsiAI وارد شو.</p><button className="primary" onClick={onExit}>رفتن به صفحه ورود</button></div></div></section>;
+  return <section className="workspace-layout"><div className="workspace-main glass"><div className="welcome"><img src="/app-icon.png" alt="FarsiAI" /><h1>{title} نیازمند ورود است</h1><p>برای دسترسی به Cloud و ابزارهای محلی، ابتدا با حساب FarsiAI وارد شو.</p><button className="primary" onClick={onExit}>رفتن به صفحه ورود</button></div></div></section>;
 }
 
 function NavButton({ active, label, caption, onClick }: { active: boolean; label: string; caption: string; onClick: () => void }) {
