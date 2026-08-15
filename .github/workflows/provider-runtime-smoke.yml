@@ -12,122 +12,99 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 7
     steps:
-      - name: Probe independent image providers
+      - name: Probe independent image providers in parallel
         shell: bash
         run: |
           node <<'NODE'
           const prompt = 'A single red apple centered on a clean white studio background, photorealistic product photo';
 
-          async function pollinations() {
-            const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=768&model=flux&seed=314159&nologo=true&safe=true`;
-            const response = await fetch(url, {
-              redirect: 'follow',
-              headers: { 'user-agent': 'FarsiAI/0.6.0 provider-runtime-smoke' },
-              signal: AbortSignal.timeout(150000),
-            });
-            const bytes = new Uint8Array(await response.arrayBuffer());
-            const contentType = response.headers.get('content-type') || '';
-            const result = { status: response.status, contentType, bytes: bytes.length, finalUrl: response.url };
-            console.log('POLLINATIONS:', JSON.stringify(result));
-            return response.ok && contentType.startsWith('image/') && bytes.length > 1000;
+          async function fetchImage(label, url, timeout = 90000) {
+            try {
+              const response = await fetch(url, {
+                redirect: 'follow',
+                headers: { 'user-agent': 'FarsiAI/0.6.0 provider-runtime-smoke' },
+                signal: AbortSignal.timeout(timeout),
+              });
+              const bytes = new Uint8Array(await response.arrayBuffer());
+              const contentType = response.headers.get('content-type') || '';
+              const ok = response.ok && contentType.startsWith('image/') && bytes.length > 1000;
+              console.log(`${label}:`, JSON.stringify({ ok, status: response.status, contentType, bytes: bytes.length, finalUrl: response.url }));
+              return ok;
+            } catch (error) {
+              console.error(`${label} ERROR:`, error instanceof Error ? error.message : error);
+              return false;
+            }
           }
 
           async function aiHorde() {
-            const commonHeaders = {
-              'Client-Agent': 'FarsiAI:0.6.0:sorniamir',
-              'Accept': 'application/json',
-            };
-            const modelsResponse = await fetch('https://aihorde.net/api/v2/status/models?type=image', {
-              headers: commonHeaders,
-              signal: AbortSignal.timeout(15000),
-            });
-            const models = await modelsResponse.json();
-            const candidates = Array.isArray(models)
-              ? models.filter((m) => Number(m?.count) > 0 && Number(m?.eta ?? 9999) < 180)
-                .sort((a, b) => Number(a.eta ?? 9999) - Number(b.eta ?? 9999) || Number(b.count ?? 0) - Number(a.count ?? 0))
-              : [];
-            const model = candidates[0]?.name;
-            console.log('AIHORDE MODEL:', JSON.stringify({ model, candidates: candidates.slice(0, 5).map((m) => ({ name: m.name, count: m.count, eta: m.eta })) }));
-            if (!model) return false;
+            try {
+              const commonHeaders = { 'Client-Agent': 'FarsiAI:0.6.0:sorniamir', 'Accept': 'application/json' };
+              const modelsResponse = await fetch('https://aihorde.net/api/v2/status/models?type=image', { headers: commonHeaders, signal: AbortSignal.timeout(15000) });
+              const models = await modelsResponse.json();
+              const candidates = Array.isArray(models)
+                ? models.filter((m) => Number(m?.count) > 0 && Number(m?.eta ?? 9999) < 120)
+                  .sort((a, b) => Number(a.eta ?? 9999) - Number(b.eta ?? 9999) || Number(b.count ?? 0) - Number(a.count ?? 0))
+                : [];
+              const model = candidates[0]?.name;
+              console.log('AIHORDE MODEL:', JSON.stringify({ model, candidates: candidates.slice(0, 5).map((m) => ({ name: m.name, count: m.count, eta: m.eta })) }));
+              if (!model) return false;
 
-            const submit = await fetch('https://aihorde.net/api/v2/generate/async', {
-              method: 'POST',
-              headers: {
-                ...commonHeaders,
-                'Content-Type': 'application/json',
-                'apikey': '0000000000',
-              },
-              body: JSON.stringify({
-                prompt,
-                params: {
-                  cfg_scale: 5,
-                  sampler_name: 'k_euler_a',
-                  height: 512,
-                  width: 512,
-                  steps: 8,
-                  n: 1,
-                  karras: true,
-                  hires_fix: false,
-                },
-                allow_downgrade: true,
-                nsfw: false,
-                censor_nsfw: true,
-                trusted_workers: false,
-                models: [model],
-                r2: true,
-                shared: false,
-                slow_workers: true,
-              }),
-              signal: AbortSignal.timeout(20000),
-            });
-            const submitText = await submit.text();
-            let submitPayload = {};
-            try { submitPayload = JSON.parse(submitText); } catch {}
-            console.log('AIHORDE SUBMIT:', JSON.stringify({ status: submit.status, id: submitPayload?.id, message: submitPayload?.message, rc: submitPayload?.rc }));
-            if (!submit.ok || !submitPayload?.id) return false;
-
-            const id = submitPayload.id;
-            const deadline = Date.now() + 150000;
-            let last = {};
-            while (Date.now() < deadline) {
-              await new Promise((resolve) => setTimeout(resolve, 2500));
-              const check = await fetch(`https://aihorde.net/api/v2/generate/check/${id}`, {
-                headers: commonHeaders,
-                signal: AbortSignal.timeout(15000),
+              const submit = await fetch('https://aihorde.net/api/v2/generate/async', {
+                method: 'POST',
+                headers: { ...commonHeaders, 'Content-Type': 'application/json', apikey: '0000000000' },
+                body: JSON.stringify({
+                  prompt,
+                  params: { cfg_scale: 5, sampler_name: 'k_euler_a', height: 512, width: 512, steps: 8, n: 1, karras: true, hires_fix: false },
+                  allow_downgrade: true,
+                  nsfw: false,
+                  censor_nsfw: true,
+                  trusted_workers: false,
+                  models: [model],
+                  r2: true,
+                  shared: false,
+                  slow_workers: true,
+                }),
+                signal: AbortSignal.timeout(20000),
               });
-              last = await check.json();
-              if (last?.done || last?.faulted) break;
+              const submitPayload = await submit.json().catch(() => ({}));
+              console.log('AIHORDE SUBMIT:', JSON.stringify({ status: submit.status, id: submitPayload?.id, message: submitPayload?.message, rc: submitPayload?.rc }));
+              if (!submit.ok || !submitPayload?.id) return false;
+
+              const id = submitPayload.id;
+              const deadline = Date.now() + 110000;
+              let last = {};
+              while (Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, 2500));
+                const check = await fetch(`https://aihorde.net/api/v2/generate/check/${id}`, { headers: commonHeaders, signal: AbortSignal.timeout(10000) });
+                last = await check.json();
+                if (last?.done || last?.faulted) break;
+              }
+              console.log('AIHORDE CHECK:', JSON.stringify({ done: last?.done, faulted: last?.faulted, wait_time: last?.wait_time, queue_position: last?.queue_position, is_possible: last?.is_possible }));
+              if (!last?.done || last?.faulted) return false;
+
+              const status = await fetch(`https://aihorde.net/api/v2/generate/status/${id}`, { headers: commonHeaders, signal: AbortSignal.timeout(15000) });
+              const payload = await status.json();
+              const generation = Array.isArray(payload?.generations) ? payload.generations[0] : null;
+              const img = generation?.img;
+              console.log('AIHORDE STATUS:', JSON.stringify({ status: status.status, state: generation?.state, model: generation?.model, hasImage: typeof img === 'string' && img.length > 0 }));
+              if (!status.ok || typeof img !== 'string' || !img) return false;
+              if (/^https?:\/\//i.test(img)) return fetchImage('AIHORDE IMAGE', img, 30000);
+              return img.length > 1000;
+            } catch (error) {
+              console.error('AIHORDE ERROR:', error instanceof Error ? error.message : error);
+              return false;
             }
-            console.log('AIHORDE CHECK:', JSON.stringify({ done: last?.done, faulted: last?.faulted, wait_time: last?.wait_time, queue_position: last?.queue_position, is_possible: last?.is_possible }));
-            if (!last?.done || last?.faulted) return false;
-
-            const status = await fetch(`https://aihorde.net/api/v2/generate/status/${id}`, {
-              headers: commonHeaders,
-              signal: AbortSignal.timeout(15000),
-            });
-            const payload = await status.json();
-            const generation = Array.isArray(payload?.generations) ? payload.generations[0] : null;
-            const img = generation?.img;
-            console.log('AIHORDE STATUS:', JSON.stringify({ status: status.status, state: generation?.state, model: generation?.model, hasImage: typeof img === 'string' && img.length > 0, imagePrefix: typeof img === 'string' ? img.slice(0, 80) : null }));
-            if (!status.ok || typeof img !== 'string' || !img) return false;
-
-            if (/^https?:\/\//i.test(img)) {
-              const image = await fetch(img, { signal: AbortSignal.timeout(30000) });
-              const bytes = new Uint8Array(await image.arrayBuffer());
-              const contentType = image.headers.get('content-type') || '';
-              console.log('AIHORDE IMAGE:', JSON.stringify({ status: image.status, contentType, bytes: bytes.length }));
-              return image.ok && contentType.startsWith('image/') && bytes.length > 1000;
-            }
-
-            return img.length > 1000;
           }
 
-          let pollinationsOk = false;
-          let hordeOk = false;
-          try { pollinationsOk = await pollinations(); } catch (error) { console.error('POLLINATIONS ERROR:', error instanceof Error ? error.stack : error); }
-          try { hordeOk = await aiHorde(); } catch (error) { console.error('AIHORDE ERROR:', error instanceof Error ? error.stack : error); }
-          console.log('SUMMARY:', JSON.stringify({ pollinationsOk, hordeOk }));
-          if (!pollinationsOk && !hordeOk) process.exit(1);
+          const legacyUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=768&model=flux&seed=314159&nologo=true&safe=true`;
+          const publicUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}`;
+          const [legacy, publicRoute, horde] = await Promise.all([
+            fetchImage('POLLINATIONS LEGACY', legacyUrl),
+            fetchImage('POLLINATIONS PUBLIC', publicUrl),
+            aiHorde(),
+          ]);
+          console.log('SUMMARY:', JSON.stringify({ legacy, publicRoute, horde }));
+          if (!legacy && !publicRoute && !horde) process.exit(1);
           NODE
