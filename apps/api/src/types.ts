@@ -50,6 +50,9 @@ export type Env = {
   NANO_BANANA_MODEL?: string;
   GEMINI_TTS_MODEL?: string;
   GEMINI_TTS_VOICE?: string;
+  POLLINATIONS_API_KEY?: string;
+  POLLINATIONS_IMAGE_MODEL?: string;
+  POLLINATIONS_FALLBACK_DISABLED?: string;
 };
 
 export type ConversationMessage = {
