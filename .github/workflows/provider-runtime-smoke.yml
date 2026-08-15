@@ -46,10 +46,7 @@ jobs:
             console.log(`HEALTH ${name}: ${health.slice(0, 300)}`);
             const response = await fetch(`${base}/v1/ai`, {
               method: 'POST',
-              headers: {
-                'content-type': 'application/json',
-                'cf-connecting-ip': name === 'production' ? '198.51.100.61' : '198.51.100.62',
-              },
+              headers: { 'content-type': 'application/json' },
               body: JSON.stringify({
                 mode: 'image',
                 imageAction: 'generate',
