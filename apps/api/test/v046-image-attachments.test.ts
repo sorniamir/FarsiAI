@@ -12,6 +12,7 @@ function envWithAi(ai: Env['AI']): Env {
     IMAGE_RATE_LIMITER: { limit: mock.fn(async () => ({ success: true })) },
     SUPABASE_URL: 'https://project.supabase.co',
     SUPABASE_SECRET_KEY: 'sb_secret_test',
+    POLLINATIONS_FALLBACK_DISABLED: 'true',
   };
 }
 
@@ -112,6 +113,38 @@ describe('v0.4.6 image and attachment contract', () => {
     assert.equal(payload.image, 'data:image/png;base64,YWJjZA==');
     assert.equal(payload.edited, false);
     assert.equal(payload.provider, 'gemini-3.1-flash-image');
+    assert.equal(aiRun.mock.callCount(), 0);
+  });
+
+  it('uses the independent Pollinations fallback when no keyed image provider is configured', async () => {
+    const aiRun = mock.fn(async () => { throw new Error('Workers AI must not run after external fallback succeeds'); });
+    const env: Env = {
+      ...envWithAi({ run: aiRun }),
+      POLLINATIONS_FALLBACK_DISABLED: undefined,
+    };
+    const imageBytes = new Uint8Array(2048).fill(7);
+    globalThis.fetch = mock.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://image.pollinations.ai/prompt/')) {
+        assert.match(url, /model=flux/);
+        return new Response(imageBytes, { status: 200, headers: { 'content-type': 'image/jpeg' } });
+      }
+      if (url.endsWith('/rpc/use_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 1 });
+      if (url.endsWith('/rpc/refund_guest_daily_quota')) return Response.json({ chatRemaining: 5, imageRemaining: 2 });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const response = await worker.fetch(request({
+      mode: 'image',
+      message: 'red apple on a white background',
+      imageAction: 'generate',
+    }), env);
+
+    assert.equal(response.status, 200);
+    const payload = await response.json() as { image: string; provider?: string; edited: boolean };
+    assert.equal(payload.edited, false);
+    assert.equal(payload.provider, 'pollinations:legacy-flux');
+    assert.match(payload.image, /^data:image\/jpeg;base64,/);
     assert.equal(aiRun.mock.callCount(), 0);
   });
 
