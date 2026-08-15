@@ -1,6 +1,6 @@
-# FarsiAI v0.5.3 production + Admin Control Center
+# Temporary provider runtime diagnostic for branch agent/fix-image-production-v063
 name = "farsiai-api"
-main = "src/index.ts"
+main = "src/diagnostics/image-runtime-worker.ts"
 compatibility_date = "2026-08-10"
 compatibility_flags = ["nodejs_compat"]
 keep_vars = true
