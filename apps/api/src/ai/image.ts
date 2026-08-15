@@ -1,5 +1,6 @@
 import { containsPersian } from '../lib/language';
 import type { Env } from '../types';
+import { runPollinationsImage } from './pollinations-image';
 import { translate } from './translate';
 
 const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
@@ -162,7 +163,6 @@ async function runNanoBanana(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort('gemini-image-timeout'), GEMINI_TIMEOUT_MS);
     try {
-      // Interactions is the canonical Nano Banana API in current Gemini docs.
       const image = await geminiInteractions(apiKey, model, prompt, reference, controller.signal)
         ?? await geminiGenerateContent(apiKey, model, prompt, reference, controller.signal);
       if (image) {
@@ -261,6 +261,20 @@ export async function runImage(
   const workersPrompt = await bestEffortWorkersPrompt(env, userPrompt);
   const finalPrompt = imagePrompt(workersPrompt, reference ? referencePrompt : undefined);
 
+  // Text-to-image must remain available even when the Cloudflare free neuron pool is exhausted.
+  // The external fallback is intentionally skipped for edits because the anonymous endpoint is text-to-image only.
+  if (!reference) {
+    const pollinations = await runPollinationsImage(env, finalPrompt);
+    if (pollinations) {
+      return {
+        image: pollinations.image,
+        prompt: finalPrompt,
+        edited: false,
+        provider: pollinations.provider,
+      };
+    }
+  }
+
   if (reference) {
     const edited = await env.AI.run(IMAGE_EDIT_MODEL, {
       prompt: finalPrompt,
@@ -281,7 +295,6 @@ export async function runImage(
   try {
     const result = await env.AI.run(IMAGE_MODEL, {
       prompt: finalPrompt,
-      // Four steps are the documented default and materially reduce daily neuron usage.
       steps: 4,
       seed: randomSeed(),
     });
